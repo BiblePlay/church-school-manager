@@ -342,3 +342,92 @@ body{background:var(--bg)!important}
 .quickContactActs .miniIconBtn svg{width:21px;height:21px}
 /* v1.5.2.5 — attendance share cleanup: hide empty helper text only */
 .finalShareBar small:empty{display:none}
+
+/* ===== v1.5.2.7 — install guidance + app-only display mode ===== */
+.themeChoice{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.themeChoiceBtn{min-height:46px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);font-weight:900}.themeChoiceBtn.active{background:#ffd21f!important;color:#111!important;border:2px solid #111!important}.themeModeHint{margin-top:9px;color:var(--muted);font-size:10px;line-height:1.45}.androidInstallHelp{margin-top:12px;padding:13px;border:1.5px solid #d8d5ce;border-radius:18px;background:#faf9f6;color:#222}.androidInstallHelp>strong{display:block;font-size:14px;margin-bottom:10px}.installStep{display:grid;grid-template-columns:30px minmax(0,1fr);gap:9px;align-items:center;margin-top:8px}.installStep span{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#ffd21f;color:#111;font-weight:950}.installStep b{font-size:13px;line-height:1.4}.finalPrimary.waiting{background:#ffd21f;color:#111}.finalOverlay{isolation:isolate}.finalOverlay+.finalOverlay{display:none!important}
+
+html[data-theme="dark"]{color-scheme:dark;--bg:#121212;--card:#202020;--ink:#f5f5f2;--muted:#aaa79f;--line:#3b3b38;--soft:#2b2b29;--accent:#ffd21f;--accentSoft:#363020;--accentInk:#ffd21f;--green:#75c99a;--red:#ff8f88;--yellow:#ffd21f;--blue:#9eabff;--shadow:0 10px 30px rgba(0,0,0,.28)}
+html[data-theme="dark"],html[data-theme="dark"] body{background:var(--bg)!important;color:var(--ink)!important}
+html[data-theme="dark"] .nav{background:rgba(18,18,18,.97)!important;border-color:var(--line)!important}
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .studentRow,
+html[data-theme="dark"] .attendanceRow,
+html[data-theme="dark"] .bottomSheet,
+html[data-theme="dark"] .settingsSection,
+html[data-theme="dark"] .settingsHero,
+html[data-theme="dark"] .contrastSection,
+html[data-theme="dark"] .quickGradeCard,
+html[data-theme="dark"] .peopleSeg,
+html[data-theme="dark"] .peopleSeg button,
+html[data-theme="dark"] .teacherHubRow,
+html[data-theme="dark"] .manageCard,
+html[data-theme="dark"] .teacherCleanRow,
+html[data-theme="dark"] .studentPhotoEdit,
+html[data-theme="dark"] .packetActionCard,
+html[data-theme="dark"] .metricCard,
+html[data-theme="dark"] .dashboardCard,
+html[data-theme="dark"] .noDataDash,
+html[data-theme="dark"] .quickContactRow,
+html[data-theme="dark"] .teacherDetailHint,
+html[data-theme="dark"] .modal,
+html[data-theme="dark"] .finalInstallCard{background:#202020!important;color:var(--ink)!important;border-color:var(--line)!important}
+html[data-theme="dark"] .input,
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea{background:#242422!important;color:var(--ink)!important;border-color:var(--line)!important}
+html[data-theme="dark"] .secondary,
+html[data-theme="dark"] .mini,
+html[data-theme="dark"] .icon,
+html[data-theme="dark"] .smallIcon,
+html[data-theme="dark"] .miniIconBtn,
+html[data-theme="dark"] .quickGradeButtons button,
+html[data-theme="dark"] .segBtn,
+html[data-theme="dark"] .chip,
+html[data-theme="dark"] .finalGhost,
+html[data-theme="dark"] .finalStartGrid button,
+html[data-theme="dark"] .themeChoiceBtn{background:#292927!important;color:var(--ink)!important;border-color:#494944!important}
+html[data-theme="dark"] .segBtn.active,
+html[data-theme="dark"] .chip.active,
+html[data-theme="dark"] .quickGradeButtons button.active,
+html[data-theme="dark"] .peopleSeg button.active,
+html[data-theme="dark"] .themeChoiceBtn.active{background:#ffd21f!important;color:#111!important;border-color:#111!important}
+html[data-theme="dark"] .primary{background:#f1f1ed!important;color:#111!important}
+html[data-theme="dark"] .darkSecondary{background:#050505!important;color:#fff!important;border-color:#555!important}
+html[data-theme="dark"] .resetMini{background:#292927!important;color:#fff!important;border-color:#777!important}
+html[data-theme="dark"] .talentPanel .money:not(.minus):not(.mult){background:#ffd21f!important;color:#111!important;border-color:#111!important}
+html[data-theme="dark"] .talentPanel .money.mult{background:#292927!important;color:#fff!important;border-color:#777!important}
+html[data-theme="dark"] .talentPanel .money.minus{background:#050505!important;color:#fff!important;border-color:#777!important}
+html[data-theme="dark"] .finalShareBtn,
+html[data-theme="dark"] .settingsHeroGrid button,
+html[data-theme="dark"] .packetExportBtn,
+html[data-theme="dark"] .teacherIconBtn.yellow,
+html[data-theme="dark"] .quickContactActs .miniIconBtn.yellow{background:#ffd21f!important;color:#111!important;border-color:#111!important}
+html[data-theme="dark"] .teacherIconBtn.message{background:#292927!important;color:#fff!important;border-color:#666!important}
+html[data-theme="dark"] .finalInstallText strong,
+html[data-theme="dark"] .quickContactWho strong,
+html[data-theme="dark"] .teacherDetailHint strong,
+html[data-theme="dark"] .packetActionText strong{color:var(--ink)!important}
+html[data-theme="dark"] .finalInstallText p,
+html[data-theme="dark"] .finalInstallText small,
+html[data-theme="dark"] .quickContactWho small,
+html[data-theme="dark"] .teacherDetailHint,
+html[data-theme="dark"] .packetActionText small,
+html[data-theme="dark"] .manageCardTitle small,
+html[data-theme="dark"] .studentDanger>small,
+html[data-theme="dark"] .extraDetails summary span{color:var(--muted)!important}
+html[data-theme="dark"] .androidInstallHelp{background:#292927!important;color:var(--ink)!important;border-color:#4b4b47!important}
+html[data-theme="dark"] .statusBtn{background:#292927!important;color:var(--ink)!important;border-color:#494944!important}
+html[data-theme="dark"] .modeCard{background:#242422!important;color:var(--ink)!important;border-color:var(--line)!important}
+html[data-theme="dark"] .modeCard:has(input:checked){background:#ffd21f!important;color:#111!important;border-color:#111!important}
+html[data-theme="dark"] .modeCard:has(input:checked) small{color:#4b421e!important}
+html[data-theme="dark"] .memo{color:var(--ink)!important}
+html[data-theme="dark"] .divider,
+html[data-theme="dark"] .row+.row,
+html[data-theme="dark"] .history,
+html[data-theme="dark"] .contactGroup{border-color:var(--line)!important}
+html[data-theme="dark"] .modalBack{background:rgba(0,0,0,.62)!important}
+html[data-theme="dark"] .finalOverlay{background:rgba(0,0,0,.68)!important}
+html[data-theme="dark"] .dashboardHead span{background:#2d2d2a!important;color:#ddd!important}
+html[data-theme="dark"] .dashboardIntro{background:#ffd21f!important;color:#111!important}
+html[data-theme="dark"] .dashboardIntroIcon{background:#fff!important}
+html[data-theme="dark"] .noContact{color:var(--muted)!important}

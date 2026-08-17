@@ -7,10 +7,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="출석·달란트" />
-  <title>교회학교 출석 · 달란트 v1.5.2.3</title>
+  <title>교회학교 출석 · 달란트 v1.5.2.7</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="styles.css?v=1.5.0" />
+  <link rel="stylesheet" href="styles.css?v=1.5.2.7" />
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
 </head>
 <body>
@@ -22,6 +22,16 @@
   <input id="baseDataImport" type="file" accept="application/json,.json" hidden />
   <input id="photoImport" type="file" accept="image/*" hidden />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    (function(){
+      try{
+        var m=localStorage.getItem('churchschool_theme_mode')||'system';
+        var d=m==='dark'||(m==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.themeMode=m;
+        document.documentElement.dataset.theme=d?'dark':'light';
+      }catch(e){}
+    })();
+  </script>
   <script src="app.js?v=1.4.2" defer></script>
   <script src="v1.4-patch.js?v=1.4.2" defer></script>
   <script src="v1.4.2-recovery.js?v=1.4.2.2" defer></script>
@@ -29,7 +39,7 @@
   <script src="v1.4.2.3-ui.js?v=1.4.2.3" defer></script>
   <script src="v1.4.2.5-people.js?v=1.4.2.5" defer></script>
   <script src="v1.4.2.6-focus.js?v=1.4.2.6" defer></script>
-  <script src="v1.5.0-final.js?v=1.5.0" defer></script>
+  <script src="v1.5.0-final.js?v=1.5.2.7" defer></script>
   <script src="v1.5.1-data-sync.js?v=1.5.1" defer></script>
   <script src="v1.5.1.1-contact-fix.js?v=1.5.1.1" defer></script>
   <script src="v1.5.1.2-excel-sheet-fix.js?v=1.5.1.2" defer></script>
