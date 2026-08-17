@@ -441,3 +441,11 @@ html[data-theme="dark"] .noContact{color:var(--muted)!important}
   line-height:1.15!important;
   letter-spacing:-0.2px;
 }
+
+/* v1.5.2.9 — readability only: student names in People > Students match Talent/Attendance. */
+.peopleList .studentRow .studentName{
+  font-size:18px!important;
+  font-weight:850!important;
+  line-height:1.15!important;
+  letter-spacing:-0.2px;
+}
