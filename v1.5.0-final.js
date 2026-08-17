@@ -26,11 +26,11 @@
     const segEnd=html.indexOf('</div>', html.indexOf('class="seg"'));
     if(segEnd>=0){
       const insertAt=segEnd+6;
-      html=html.slice(0,insertAt)+shareBar(act,label,'현재 날짜 · 현재 범위 기준')+html.slice(insertAt);
+      html=html.slice(0,insertAt)+shareBar(act,label,'')+html.slice(insertAt);
     }else{
       const firstCardEnd=html.indexOf('</div></div></div>');
       const insertAt=firstCardEnd>=0?firstCardEnd+18:0;
-      html=html.slice(0,insertAt)+shareBar(act,label,'현재 날짜 · 현재 범위 기준')+html.slice(insertAt);
+      html=html.slice(0,insertAt)+shareBar(act,label,'')+html.slice(insertAt);
     }
     return html;
   };

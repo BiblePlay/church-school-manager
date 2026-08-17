@@ -340,3 +340,5 @@ body{background:var(--bg)!important}
 .quickContactActs .miniIconBtn{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border:2px solid #111;border-radius:14px;background:#fff;color:#111}
 .quickContactActs .miniIconBtn.yellow{background:#ffd21f}
 .quickContactActs .miniIconBtn svg{width:21px;height:21px}
+/* v1.5.2.5 — attendance share cleanup: hide empty helper text only */
+.finalShareBar small:empty{display:none}
