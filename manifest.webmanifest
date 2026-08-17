@@ -1,0 +1,15 @@
+{
+  "name": "교회학교 출석 · 달란트",
+  "short_name": "출석·달란트",
+  "description": "교회학교 학생·교사 명부, 출석, 달란트, 공유 관리 앱",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8f5ee",
+  "theme_color": "#ffd21f",
+  "icons": [
+    {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
