@@ -15,7 +15,45 @@
 
   const own=(o,k)=>!!o&&Object.prototype.hasOwnProperty.call(o,k);
   const hasStudentRecord=k=>!!state.sessions?.[k]&&Object.keys(state.sessions[k].attendance||{}).length>0;
-  const hasTeacherRecord=k=>!!state.teacherSessions?.[k]&&Object.keys(state.teacherSessions[k].attendance||{}).length>0;
+
+  // Teacher attendance follows the same rule as student attendance:
+  // simply opening a date must never create a real attendance session.
+  // Old auto-generated rows where everyone is absent are ignored unless
+  // that date was explicitly started by a teacher-attendance action.
+  function teacherRecordMeaningful(raw){
+    if(!raw)return false;
+    const present=(typeof raw.present==='boolean')?raw.present:['present','late'].includes(raw.status);
+    return present || !!raw.late || !!String(raw.reason||'').trim();
+  }
+  function teacherAttendanceSessionRecorded(k){
+    const sess=state.teacherSessions?.[k];
+    if(!sess)return false;
+    // A teacher date is a real attendance record only when at least one
+    // meaningful teacher entry exists. Merely opening/initializing a date,
+    // or stale legacy attendanceStarted=true with everyone absent, is ignored.
+    return Object.values(sess.attendance||{}).some(teacherRecordMeaningful);
+  }
+  window.teacherAttendanceSessionRecorded=teacherAttendanceSessionRecorded;
+  const hasTeacherRecord=k=>teacherAttendanceSessionRecorded(k);
+
+  function markTeacherAttendanceStarted(k=ui.date){
+    const sess=ensureTeacherSession(k);
+    sess.attendanceStarted=true;
+    return sess;
+  }
+
+  // Mark a teacher session only when the user actually records something.
+  const priorToggleTeacherAttendance_v1533=toggleTeacherAttendance;
+  toggleTeacherAttendance=function(id){markTeacherAttendanceStarted();return priorToggleTeacherAttendance_v1533(id);};
+  const priorToggleTeacherAttendanceFlag_v1533=toggleTeacherAttendanceFlag;
+  toggleTeacherAttendanceFlag=function(id,flag){markTeacherAttendanceStarted();return priorToggleTeacherAttendanceFlag_v1533(id,flag);};
+  const priorSetAllTeacherAttendance_v1533=setAllTeacherAttendance;
+  setAllTeacherAttendance=function(v){markTeacherAttendanceStarted();return priorSetAllTeacherAttendance_v1533(v);};
+  const priorSaveTeacherReasonAuto_v1533=saveTeacherReasonAuto;
+  saveTeacherReasonAuto=function(id,el){
+    if(el&&String(el.value||'').trim())markTeacherAttendanceStarted();
+    return priorSaveTeacherReasonAuto_v1533(id,el);
+  };
   const teacherHistoryDates=()=>Object.keys(state.teacherSessions||{}).filter(hasTeacherRecord).sort().reverse();
   const studentHistoryDates=()=>Object.keys(state.sessions||{}).filter(hasStudentRecord).sort();
   const teacherRecordedDates=()=>Object.keys(state.teacherSessions||{}).filter(hasTeacherRecord).sort();
@@ -180,10 +218,17 @@
 
   // Keep future teacher Kakao messages date-readable and leave all other sharing unchanged.
   shareCurrentTeacherAttendance=async function(){
+    if(!teacherAttendanceSessionRecorded(ui.date))return toast('이 날짜에는 아직 교사 출석 기록이 없습니다.');
     const all=activeTeachers(),list=(typeof v14TeacherOnLeave==='function'?all.filter(t=>!v14TeacherOnLeave(t,ui.date)):all),present=list.filter(t=>teacherAtt(t).present),absent=list.filter(t=>!teacherAtt(t).present),notes=[];
     list.forEach(t=>{const a=teacherAtt(t),bits=[];if(a.late)bits.push('지각');if(a.reason)bits.push(a.reason);if(bits.length)notes.push(`${t.name} — ${bits.join(' · ')}`);});
     const lines=[`${displayDate()} · 교사 출석`,`오늘 출석 ${present.length} / 전체 ${list.length}명`,'','출석',present.map(t=>t.name).join(', ')||'없음','','결석',absent.map(t=>t.name).join(', ')||'없음',...(notes.length?['','비고',...notes]:[])];
     await nativeShare({title:'교사 출석',text:lines.join('\n')});
+  };
+
+  const priorShareTeacherAttendance_v1533=shareTeacherAttendance;
+  shareTeacherAttendance=async function(){
+    if(!teacherAttendanceSessionRecorded(ui.date))return toast('이 날짜에는 아직 교사 출석 기록이 없습니다.');
+    return priorShareTeacherAttendance_v1533();
   };
 
   // ---------- settings: only add compact attendance sync actions ----------
