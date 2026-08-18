@@ -14,16 +14,10 @@
     return gs.includes(s)?s:(gs[0]||'전체');
   }
 
-  // Ordinary grade filter rows follow the selected use mode.
-  // 담당 선생님: only the grades explicitly assigned in Settings are shown.
-  // 전체 관리자: keep access to all grades.
+  // 담당 학년은 접근 제한이 아니라 기본 시작 학년이다.
+  // 모든 모드에서 전체/각 학년을 자유롭게 다시 선택할 수 있어야 한다.
   if(typeof scopeOptionsWithManaged==='function'){
-    scopeOptionsWithManaged=function(){
-      const gs=realGrades();
-      const managed=(state.settings.managedGrades||[]).filter(g=>gs.includes(g));
-      if(!state.settings.adminMode) return managed.length?managed:['전체'];
-      return ['전체',...gs];
-    };
+    scopeOptionsWithManaged=function(){ return ['전체',...realGrades()]; };
   }
 
   // Keep existing settings UI, but hide the duplicate visible "기본 관리 범위" selector.
@@ -43,24 +37,26 @@
     const adminMode=(document.querySelector('input[name="adminMode"]:checked')?.value||'admin')==='admin';
     const managedGrades=[...document.querySelectorAll('[data-managed-grade]:checked')].map(x=>x.dataset.managedGrade);
     const managedTeams=[...document.querySelectorAll('[data-managed-team]:checked')].map(x=>x.dataset.managedTeam);
-    if(!managedGrades.length)return toast('기본으로 볼 학년을 하나 이상 선택해 주세요.');
-    const grade=managedGrades[0];
+    const grade=managedGrades[0]||'';
+    if(!adminMode && !grade)return toast('내 담당 학년을 하나 이상 선택해 주세요.');
+    const defaultScope=adminMode?'전체':grade;
     state.settings.department=dep||'교회학교';
     state.settings.adminMode=adminMode;
-    state.settings.managementScope=grade;
+    state.settings.managementScope=defaultScope;
     state.settings.amounts=nums;
     state.settings.managedGrades=managedGrades;
     state.settings.managedTeams=managedTeams;
     const la=document.getElementById('longAbsenceDays'); if(la)state.settings.longAbsenceDays=Number(la.value)||60;
 
-    // The same default grade is applied once to the four student-facing tabs.
-    ui.attendanceGrade=grade;
-    ui.analyticsScope=grade;
-    ui.studentGrade=grade;
+    // 담당 선생님은 선택 학년으로 시작하되 다른 학년/전체 선택은 계속 가능하다.
+    // 전체 관리자는 담당 학년 선택 없이 전체로 시작한다.
+    ui.attendanceGrade=defaultScope;
+    ui.analyticsScope=defaultScope;
+    ui.studentGrade=defaultScope;
     ui.filterType='학년';
-    ui.filterValue=grade;
+    ui.filterValue=defaultScope;
     save();
-    toast(`${grade}을 기본 학년으로 저장했습니다.`);
+    toast(adminMode?'전체 관리자 모드로 저장했습니다.':`${grade}을 기본 학년으로 저장했습니다.`);
     render();
   };
 
