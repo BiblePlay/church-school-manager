@@ -292,7 +292,7 @@ function talentView(){
   const selectedLabel=ui.selected.size?`선택 ${ui.selected.size}명`:'학생을 선택해 주세요';
   return `${dateControl()}${hero()}
     <div class="viewActionRow"><button class="shareAction" data-act="shareCurrentTalent">공유</button><span>현재 범위 달란트 현황을 바로 공유합니다.</span></div>
-    <div class="chips">${['학년','팀'].map(x=>`<button class="chip ${ui.filterType===x?'active':''}" data-filtertype="${x}">${x}</button>`).join('')}</div>
+    <div class="chips">${['학년'].map(x=>`<button class="chip ${ui.filterType===x?'active':''}" data-filtertype="${x}">${x}</button>`).join('')}</div>
     <div class="chips">${filterOptions().map(v=>`<button class="chip ${ui.filterValue===v?'active':''}" data-filtervalue="${attr(v)}">${esc(v)}</button>`).join('')}</div>
     <div class="sectionHead"><div><div class="sectionTitle">학생 선택</div><div class="muted">대상을 선택하고 금액을 누르면 바로 지급됩니다.</div></div><span class="badge">${selectedLabel}</span></div>
     <div class="list">${list.map(st=>`<button class="studentRow ${st.photo?'hasPhoto':'noPhoto'} ${ui.selected.has(st.id)?'selected':''}" data-selectstudent="${st.id}">${avatarCell(st)}<span><span class="studentName">${esc(st.name)}</span><span class="studentMeta">${esc(st.grade||'학년 미지정')}${att(st).present?' · 출석':''}</span></span><span class="amount ${todayAmt(st.id)<0?'negative':''}">${todayAmt(st.id)>0?'+':''}${fmt(todayAmt(st.id))}</span></button>`).join('')||'<div class="empty">학생이 없습니다.</div>'}</div>
