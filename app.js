@@ -322,7 +322,7 @@ function attendanceView(){
     ${state.settings.teacherAttendanceEnabled?`<div class="seg"><button class="segBtn active" data-attmode="student">학생</button><button class="segBtn" data-attmode="teacher">교사</button></div>`:''}
     <div class="attendanceSummary attendanceSummaryStrong"><div class="attendanceSummaryMain"><div><div class="label lightLabel">${esc(ui.attendanceGrade)} 출석</div><div class="attendanceBig"><strong>${present}</strong><span>/ ${list.length}명</span></div><div class="summarySub">결석 ${c.absent} · 지각 ${c.late} · 새친구 ${c.new}</div></div><button class="shareAction" data-act="shareCurrentAttendance">공유</button></div><div class="attendanceBulk"><button class="primary" data-act="attendanceSelectAll">전체 선택</button><button class="secondary darkSecondary" data-act="attendanceClearAll">전체 해제</button></div></div>
     ${ui.attendanceGrade==='전체'?attendanceGradeSummary():''}
-    <div class="chips">${scopeChips.map(v=>`<button class="chip ${ui.attendanceGrade===v?'active':''}" data-attgrade="${attr(v)}">${esc(v)}</button>`).join('')}</div>
+    ${state.settings.adminMode?`<div class="chips">${scopeChips.map(v=>`<button class="chip ${ui.attendanceGrade===v?'active':''}" data-attgrade="${attr(v)}">${esc(v)}</button>`).join('')}</div>`:''}
     <div class="sortBar"><span>정렬</span>${[['attendance','출석 우선'],['name','가나다'],['grade','학년'],['custom','사용자']].map(([v,l])=>`<button class="sortBtn ${state.settings.attendanceSort===v?'active':''}" data-att-sort="${v}">${l}</button>`).join('')}</div>
     <div class="list">${listHtml||'<div class="empty">학생이 없습니다.</div>'}</div>`;
 }
