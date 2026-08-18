@@ -1,4 +1,4 @@
-const APP_VERSION = '1.4.2-recovery';
+const APP_VERSION = '1.5.3.14';
 const STORAGE_KEY = 'church-school-mobile-v4'; // v0.4 데이터 그대로 이어서 사용
 
 const sampleStudents = [];

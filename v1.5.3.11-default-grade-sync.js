@@ -14,9 +14,16 @@
     return gs.includes(s)?s:(gs[0]||'전체');
   }
 
-  // Remove the ambiguous "내 담당" chip from ordinary grade filter rows.
+  // Ordinary grade filter rows follow the selected use mode.
+  // 담당 선생님: only the grades explicitly assigned in Settings are shown.
+  // 전체 관리자: keep access to all grades.
   if(typeof scopeOptionsWithManaged==='function'){
-    scopeOptionsWithManaged=function(){ return ['전체',...realGrades()]; };
+    scopeOptionsWithManaged=function(){
+      const gs=realGrades();
+      const managed=(state.settings.managedGrades||[]).filter(g=>gs.includes(g));
+      if(!state.settings.adminMode) return managed.length?managed:['전체'];
+      return ['전체',...gs];
+    };
   }
 
   // Keep existing settings UI, but hide the duplicate visible "기본 관리 범위" selector.
