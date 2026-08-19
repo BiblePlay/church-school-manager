@@ -14,7 +14,7 @@
   ui.attendanceBundlePreview = ui.attendanceBundlePreview || null;
 
   const own=(o,k)=>!!o&&Object.prototype.hasOwnProperty.call(o,k);
-  const hasStudentRecord=k=>!!state.sessions?.[k]&&Object.keys(state.sessions[k].attendance||{}).length>0;
+  const hasStudentRecord=k=>typeof attendanceSessionRecorded==='function'?attendanceSessionRecorded(k):(!!state.sessions?.[k]&&Object.keys(state.sessions[k].attendance||{}).length>0);
 
   // Teacher attendance follows the same rule as student attendance:
   // simply opening a date must never create a real attendance session.
@@ -36,24 +36,8 @@
   window.teacherAttendanceSessionRecorded=teacherAttendanceSessionRecorded;
   const hasTeacherRecord=k=>teacherAttendanceSessionRecorded(k);
 
-  function markTeacherAttendanceStarted(k=ui.date){
-    const sess=ensureTeacherSession(k);
-    sess.attendanceStarted=true;
-    return sess;
-  }
-
-  // Mark a teacher session only when the user actually records something.
-  const priorToggleTeacherAttendance_v1533=toggleTeacherAttendance;
-  toggleTeacherAttendance=function(id){markTeacherAttendanceStarted();return priorToggleTeacherAttendance_v1533(id);};
-  const priorToggleTeacherAttendanceFlag_v1533=toggleTeacherAttendanceFlag;
-  toggleTeacherAttendanceFlag=function(id,flag){markTeacherAttendanceStarted();return priorToggleTeacherAttendanceFlag_v1533(id,flag);};
-  const priorSetAllTeacherAttendance_v1533=setAllTeacherAttendance;
-  setAllTeacherAttendance=function(v){markTeacherAttendanceStarted();return priorSetAllTeacherAttendance_v1533(v);};
-  const priorSaveTeacherReasonAuto_v1533=saveTeacherReasonAuto;
-  saveTeacherReasonAuto=function(id,el){
-    if(el&&String(el.value||'').trim())markTeacherAttendanceStarted();
-    return priorSaveTeacherReasonAuto_v1533(id,el);
-  };
+  // 실제 체크 동작은 app.js의 출석 저장 함수가 담당한다.
+  // 이 파일에서는 화면 열기/전체 해제로 attendanceStarted 같은 가짜 기록 표식을 만들지 않는다.
   const teacherHistoryDates=()=>Object.keys(state.teacherSessions||{}).filter(hasTeacherRecord).sort().reverse();
   const studentHistoryDates=()=>Object.keys(state.sessions||{}).filter(hasStudentRecord).sort();
   const teacherRecordedDates=()=>Object.keys(state.teacherSessions||{}).filter(hasTeacherRecord).sort();
@@ -111,14 +95,28 @@
   function saveStudentAttendanceEdit(){
     const d=ui.attendanceEditDraft;if(!d)return;
     document.querySelectorAll('[data-edit-student-memo]').forEach(el=>{const id=el.dataset.editStudentMemo,a=d.attendance[id]||draftStudent(id);d.attendance[id]={...a,memo:el.value||''};});
-    pushUndo();state.sessions[d.date] ||= {attendance:{},transactions:[]};state.sessions[d.date].attendance=clone(d.attendance);save();
-    ui.attendanceEditDraft=null;ui.modal=null;toast(`${displayDate(d.date)} 학생 출석 기록을 수정했습니다.`);render();
+    const real=Object.values(d.attendance||{}).some(a=>!!a&&(!!a.present||!!a.late||!!a.newcomer));
+    pushUndo();
+    if(real){
+      state.sessions[d.date] ||= {attendance:{},transactions:[]};
+      state.sessions[d.date].attendance=clone(d.attendance);
+      delete state.sessions[d.date].attendanceStarted;
+    }else if(state.sessions?.[d.date]){
+      state.sessions[d.date].attendance={};delete state.sessions[d.date].attendanceStarted;
+      if(!(state.sessions[d.date].transactions||[]).length)delete state.sessions[d.date];
+    }
+    save();
+    ui.attendanceEditDraft=null;ui.modal=null;toast(real?`${displayDate(d.date)} 학생 출석 기록을 수정했습니다.`:'출석 체크가 없어 해당 날짜 기록을 제거했습니다.');render();
   }
   function saveTeacherAttendanceEdit(){
     const d=ui.teacherAttendanceEditDraft;if(!d)return;
     document.querySelectorAll('[data-edit-teacher-reason]').forEach(el=>{const id=el.dataset.editTeacherReason,a=d.attendance[id]||draftTeacher(id);d.attendance[id]={...a,reason:el.value||''};});
-    pushUndo();state.teacherSessions[d.date] ||= {attendance:{}};state.teacherSessions[d.date].attendance=clone(d.attendance);save();
-    ui.teacherAttendanceEditDraft=null;ui.modal={type:'teacherAttendanceHistory'};toast(`${displayDate(d.date)} 교사 출석 기록을 수정했습니다.`);render();
+    const real=Object.values(d.attendance||{}).some(a=>!!a&&(!!a.present||!!a.late));
+    pushUndo();
+    if(real){state.teacherSessions[d.date]={attendance:clone(d.attendance)};}
+    else delete state.teacherSessions[d.date];
+    save();
+    ui.teacherAttendanceEditDraft=null;ui.modal={type:'teacherAttendanceHistory'};toast(real?`${displayDate(d.date)} 교사 출석 기록을 수정했습니다.`:'출석 체크가 없어 해당 날짜 기록을 제거했습니다.');render();
   }
 
   // ---------- one-file attendance bundle ----------

@@ -75,38 +75,42 @@
     return moveDateBelowSummary(priorTeacherAttendanceView_v1535(),'teacher');
   };
 
-  // Auto-save feedback. The underlying functions still perform the actual save.
+  // Auto-save feedback is decided AFTER the real save.
+  // Clearing the last check must show "기록 없음", never a false "저장됨".
+  function finishFeedback(mode,was,date,result){
+    const now=mode==='teacher'?teacherRecorded(date):studentRecorded(date);
+    ui.attendanceSaveFlash=null;
+    if(now)flashAutoSaved(mode,was,date);
+    if(isCurrentAttendanceMode(mode)&&ui.date===date)render();
+    return result;
+  }
   const priorToggleStudentAttendance_v1535=toggleStudentAttendance;
-  toggleStudentAttendance=function(id){const d=ui.date,was=studentRecorded(d);flashAutoSaved('student',was,d);return priorToggleStudentAttendance_v1535(id);};
+  toggleStudentAttendance=function(id){const d=ui.date,was=studentRecorded(d);const r=priorToggleStudentAttendance_v1535(id);return finishFeedback('student',was,d,r);};
   const priorToggleStudentAttendanceFlag_v1535=toggleStudentAttendanceFlag;
-  toggleStudentAttendanceFlag=function(id,flag){const d=ui.date,was=studentRecorded(d);flashAutoSaved('student',was,d);return priorToggleStudentAttendanceFlag_v1535(id,flag);};
+  toggleStudentAttendanceFlag=function(id,flag){const d=ui.date,was=studentRecorded(d);const r=priorToggleStudentAttendanceFlag_v1535(id,flag);return finishFeedback('student',was,d,r);};
   const priorSetAllStudentAttendance_v1535=setAllStudentAttendance;
-  setAllStudentAttendance=function(v){const d=ui.date,was=studentRecorded(d);flashAutoSaved('student',was,d);return priorSetAllStudentAttendance_v1535(v);};
+  setAllStudentAttendance=function(v){const d=ui.date,was=studentRecorded(d);const r=priorSetAllStudentAttendance_v1535(v);return finishFeedback('student',was,d,r);};
   const priorSaveStudentMemoAuto_v1535=saveStudentMemoAuto;
   saveStudentMemoAuto=function(id,el){
-    const d=ui.date,was=studentRecorded(d),before=studentById(id)?(att(studentById(id),d).memo||''):'';
-    const next=el?String(el.value||''):before;
-    const changed=next!==before && (next.trim() || was);
-    if(changed)flashAutoSaved('student',was,d);
+    const d=ui.date,was=studentRecorded(d),st=studentById(id),before=st?(att(st,d).memo||''):'';
     const r=priorSaveStudentMemoAuto_v1535(id,el);
-    if(changed)render();
+    const after=st?(att(st,d).memo||''):'';
+    if(after!==before)return finishFeedback('student',was,d,r);
     return r;
   };
 
   const priorToggleTeacherAttendance_v1535=toggleTeacherAttendance;
-  toggleTeacherAttendance=function(id){const d=ui.date,was=teacherRecorded(d);flashAutoSaved('teacher',was,d);return priorToggleTeacherAttendance_v1535(id);};
+  toggleTeacherAttendance=function(id){const d=ui.date,was=teacherRecorded(d);const r=priorToggleTeacherAttendance_v1535(id);return finishFeedback('teacher',was,d,r);};
   const priorToggleTeacherAttendanceFlag_v1535=toggleTeacherAttendanceFlag;
-  toggleTeacherAttendanceFlag=function(id,flag){const d=ui.date,was=teacherRecorded(d);flashAutoSaved('teacher',was,d);return priorToggleTeacherAttendanceFlag_v1535(id,flag);};
+  toggleTeacherAttendanceFlag=function(id,flag){const d=ui.date,was=teacherRecorded(d);const r=priorToggleTeacherAttendanceFlag_v1535(id,flag);return finishFeedback('teacher',was,d,r);};
   const priorSetAllTeacherAttendance_v1535=setAllTeacherAttendance;
-  setAllTeacherAttendance=function(v){const d=ui.date,was=teacherRecorded(d);flashAutoSaved('teacher',was,d);return priorSetAllTeacherAttendance_v1535(v);};
+  setAllTeacherAttendance=function(v){const d=ui.date,was=teacherRecorded(d);const r=priorSetAllTeacherAttendance_v1535(v);return finishFeedback('teacher',was,d,r);};
   const priorSaveTeacherReasonAuto_v1535=saveTeacherReasonAuto;
   saveTeacherReasonAuto=function(id,el){
     const d=ui.date,was=teacherRecorded(d),t=teacherById(id),before=t?(teacherAtt(t,d).reason||''):'';
-    const next=el?String(el.value||''):before;
-    const changed=next!==before && (next.trim() || was);
-    if(changed)flashAutoSaved('teacher',was,d);
     const r=priorSaveTeacherReasonAuto_v1535(id,el);
-    if(changed)render();
+    const after=t?(teacherAtt(t,d).reason||''):'';
+    if(after!==before)return finishFeedback('teacher',was,d,r);
     return r;
   };
 
@@ -133,19 +137,10 @@
     return html;
   };
 
-  // Past-record edit is an explicit recording action, including an intentional all-absent record.
+  // Past-record edit follows the same rule: a date remains a record only
+  // when at least one real attendance check exists.
   const priorHandleAct_v1535=handleAct;
-  handleAct=function(act,b){
-    if(act==='saveStudentAttendanceEdit' && ui.attendanceEditDraft?.date){
-      state.sessions[ui.attendanceEditDraft.date] ||= {attendance:{},transactions:[]};
-      state.sessions[ui.attendanceEditDraft.date].attendanceStarted=true;
-    }
-    if(act==='saveTeacherAttendanceEdit' && ui.teacherAttendanceEditDraft?.date){
-      state.teacherSessions[ui.teacherAttendanceEditDraft.date] ||= {attendance:{}};
-      state.teacherSessions[ui.teacherAttendanceEditDraft.date].attendanceStarted=true;
-    }
-    return priorHandleAct_v1535(act,b);
-  };
+  handleAct=function(act,b){ return priorHandleAct_v1535(act,b); };
 
   const priorBind_v1535=bind;
   bind=function(){

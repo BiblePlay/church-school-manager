@@ -11,35 +11,30 @@
   }
   function meaningful(raw){
     if(!raw) return false;
-    return rawPresent(raw) || !!raw.late || !!raw.newcomer || !!String(raw.memo||'').trim();
+    return rawPresent(raw) || !!raw.late || !!raw.newcomer;
   }
   window.attendanceSessionRecorded=function(k){
     const sess=state.sessions?.[k];
     if(!sess) return false;
-    if(sess.attendanceStarted===true) return true;
-    const records=sess.attendance||{};
-    // Legacy sessions are considered real only when there is positive/meaningful evidence.
-    // This filters old auto-generated "everyone absent" sessions.
-    return Object.values(records).some(meaningful);
+    // 실제 출석/지각/새친구 체크가 하나라도 있는 날짜만 출석 기록이다.
+    // 화면 열기, 전체 해제, 예전 attendanceStarted 플래그, 전원 결석 자동 행은 기록으로 인정하지 않는다.
+    return Object.values(sess.attendance||{}).some(meaningful);
   };
 
-  function markStarted(k=ui.date){
-    const sess=ensureSession(k);
-    sess.attendanceStarted=true;
-    return sess;
+  // 과거 버전이 만든 "전원 미체크/전원 결석" 유령 출석은 화면과 내보내기에서
+  // 다시 나타나지 않도록 attendance 부분만 정리한다. 같은 날짜의 달란트 거래는 보존한다.
+  let cleaned=false;
+  for(const k of Object.keys(state.sessions||{})){
+    const sess=state.sessions[k];
+    if(!sess||attendanceSessionRecorded(k))continue;
+    if(Object.keys(sess.attendance||{}).length || sess.attendanceStarted){
+      sess.attendance={};
+      delete sess.attendanceStarted;
+      if(!(sess.transactions||[]).length)delete state.sessions[k];
+      cleaned=true;
+    }
   }
-
-  const oldToggleStudentAttendance=toggleStudentAttendance;
-  toggleStudentAttendance=function(id){ markStarted(); return oldToggleStudentAttendance(id); };
-  const oldToggleStudentAttendanceFlag=toggleStudentAttendanceFlag;
-  toggleStudentAttendanceFlag=function(id,flag){ markStarted(); return oldToggleStudentAttendanceFlag(id,flag); };
-  const oldSetAllStudentAttendance=setAllStudentAttendance;
-  setAllStudentAttendance=function(v){ markStarted(); return oldSetAllStudentAttendance(v); };
-  const oldSaveStudentMemoAuto=saveStudentMemoAuto;
-  saveStudentMemoAuto=function(id,el){
-    if(el && String(el.value||'').trim()) markStarted();
-    return oldSaveStudentMemoAuto(id,el);
-  };
+  if(cleaned)save();
 
   // Individual recent-history helper used by student detail.
   if(typeof recentAttendanceKeys==='function'){

@@ -1,4 +1,4 @@
-const APP_VERSION = '1.5.3.15';
+const APP_VERSION = '1.5.3.18';
 const STORAGE_KEY = 'church-school-mobile-v4'; // v0.4 데이터 그대로 이어서 사용
 
 const sampleStudents = [];
@@ -11,7 +11,7 @@ const defaultState = {
   teachers:sampleTeachers,
   sessions:{},
   teacherSessions:{},
-  teams:['빨강팀','파랑팀'],
+  teams:[],
   settings:{
     amounts:[10,20,50,100],
     department:'초등부',
@@ -35,16 +35,17 @@ let pendingMerge = null;
 let ui = {
   tab:'talent',
   date:todayKey(),
-  filterType:'학년', filterValue:state.settings.adminMode?'전체':'내 담당',
+  filterType:'학년', filterValue:state.settings.adminMode?'전체':(state.settings.managementScope||state.settings.managedGrades?.[0]||'전체'),
   attendanceGrade:state.settings.managementScope || '전체',
-  studentGrade:state.settings.adminMode?'전체':'내 담당',
+  studentGrade:state.settings.adminMode?'전체':(state.settings.managementScope||state.settings.managedGrades?.[0]||'전체'),
   attendanceMode:'student',
   selected:new Set(), multiplier:1, sign:1,
   undo:[], redo:[], modal:null,
   importPreview:null, importMode:'update', photoStudentId:null, lastTxId:null,
   analyticsRange:'이번 달', analyticsScope:state.settings.managementScope || '전체',
   teamEditId:null, teamGrade:'전체', gradeSelected:new Set(), bulkGrade:'전체', bulkSelected:new Set(), orderGrade:'전체', birthdayMonth:new Date().getMonth()+1,
-  attendanceDraft:null, attendanceDraftKey:'', teacherAttendanceDraft:null, teacherAttendanceDraftKey:''
+  attendanceDraft:null, attendanceDraftKey:'', teacherAttendanceDraft:null, teacherAttendanceDraftKey:'',
+  scopeMenu:null, settingsDefaultGrade:null
 };
 
 function clone(v){ return JSON.parse(JSON.stringify(v)); }
@@ -128,13 +129,13 @@ function teacherById(id){ return state.teachers.find(t=>t.id===id); }
 function grades(){ return [...new Set(active().map(s=>String(s.grade||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko')); }
 function allTeams(){ return [...new Set([...(state.teams||[]),...active().flatMap(s=>s.teams||[])].filter(Boolean))]; }
 function att(st,k=ui.date){
-  const raw=ensureSession(k).attendance[st.id] || {};
+  const raw=state.sessions?.[k]?.attendance?.[st.id] || {};
   const legacy=raw.status||'unset';
   const present=(typeof raw.present==='boolean')?raw.present:['present','late','new'].includes(legacy);
   return {...raw,present,late:(typeof raw.late==='boolean'?raw.late:legacy==='late'),newcomer:(typeof raw.newcomer==='boolean'?raw.newcomer:legacy==='new'),memo:raw.memo||'',status:present?'present':'absent'};
 }
 function teacherAtt(t,k=ui.date){
-  const raw=ensureTeacherSession(k).attendance[t.id] || {};
+  const raw=state.teacherSessions?.[k]?.attendance?.[t.id] || {};
   const legacy=raw.status||'unset';
   const present=(typeof raw.present==='boolean')?raw.present:['present','late'].includes(legacy);
   return {...raw,present,late:(typeof raw.late==='boolean'?raw.late:legacy==='late'),reason:raw.reason||'',status:present?'present':'absent'};
@@ -155,7 +156,7 @@ function teacherAttendanceCounts(list=activeTeachers(),k=ui.date){
 }
 function todayAmt(id,k=ui.date){
   let bal=0;
-  for(const t of ensureSession(k).transactions){
+  for(const t of (state.sessions?.[k]?.transactions||[])){
     if(!(t.studentIds||[]).includes(id))continue;
     if(t.kind==='reset') bal=0; else bal+=Number(t.amount||0);
   }
@@ -171,27 +172,39 @@ function totalAmt(id){
   }
   return bal;
 }
-function sessionTotal(k=ui.date){ return ensureSession(k).transactions.reduce((sum,t)=>t.kind==='reset'?sum:sum+Number(t.amount||0)*(t.studentIds||[]).length,0); }
+function sessionTotal(k=ui.date){ return (state.sessions?.[k]?.transactions||[]).reduce((sum,t)=>t.kind==='reset'?sum:sum+Number(t.amount||0)*(t.studentIds||[]).length,0); }
 function initials(n){ return (n||'?').slice(-2); }
 function avatar(st,cls='avatar'){ return st.photo?`<span class="${cls}"><img src="${st.photo}" alt="${attr(st.name||'학생')} 사진"></span>`:''; }
 function avatarCell(st){ return st.photo?avatar(st):'<span class="avatarSpacer"></span>'; }
 
-function scopedStudents(scope=state.settings.managementScope||'전체'){
-  const admin=!!state.settings.adminMode;
-  const managed=state.settings.managedGrades||[];
-  if(!admin){
-    const base=active().filter(s=>managed.includes(s.grade));
-    if(scope==='전체'||scope==='내 담당') return base;
-    return base.filter(s=>s.grade===scope);
+function scopeStudents(scope='전체'){
+  const key=String(scope||'전체');
+  if(key==='전체')return active();
+  if(key==='내 담당'){
+    const managed=state.settings.managedGrades||[];
+    return managed.length?active().filter(s=>managed.includes(s.grade)):active();
   }
-  if(scope==='내 담당') return active().filter(s=>managed.includes(s.grade));
-  return scope==='전체' ? active() : active().filter(s=>s.grade===scope);
+  if(key.startsWith('팀:')){
+    const team=key.slice(2);
+    return active().filter(s=>(s.teams||[]).includes(team));
+  }
+  return active().filter(s=>s.grade===key);
 }
-function scopeOptionsWithManaged(){
-  const admin=!!state.settings.adminMode;
-  const managed=state.settings.managedGrades||[];
-  if(!admin) return ['내 담당',...managed];
-  return ['전체',...(managed.length?['내 담당']:[]),...grades()];
+function scopedStudents(scope=state.settings.managementScope||'전체'){ return scopeStudents(scope); }
+function scopeOptionsWithManaged(){ return ['전체',...grades()]; }
+function scopeChoices(includeTeams=true){
+  const out=['전체',...grades()];
+  if(includeTeams) allTeams().forEach(t=>out.push(`팀:${t}`));
+  return out;
+}
+function scopeLabel(scope){
+  const key=String(scope||'전체');
+  return key.startsWith('팀:')?key.slice(2):key;
+}
+function scopeChoiceHtml(view,current,includeTeams=true){
+  const open=ui.scopeMenu===view;
+  const choices=scopeChoices(includeTeams);
+  return `<div class="scopeChooser"><button class="scopeChooserBtn ${open?'active':''}" data-scope-toggle="${view}"><span>보기</span><strong>${esc(scopeLabel(current))}</strong><b>${open?'▲':'▼'}</b></button>${open?`<div class="scopeChooserPanel">${choices.map(v=>`<button class="chip ${current===v?'active':''}" data-scope-pick="${attr(v)}" data-scope-view="${view}">${v.startsWith('팀:')?'팀 · ':''}${esc(scopeLabel(v))}</button>`).join('')}</div>`:''}</div>`;
 }
 function koName(a,b){ return String(a.name||'').localeCompare(String(b.name||''),'ko'); }
 function lastPresentDate(st){
@@ -223,10 +236,9 @@ function sortStudents(arr,mode){
   return out;
 }
 function filterStudents(){
-  let arr=scopedStudents();
+  let arr=active();
   if(ui.filterType==='학년'){
-    if(ui.filterValue==='내 담당') arr=scopedStudents('내 담당');
-    else if(ui.filterValue!=='전체') arr=arr.filter(s=>s.grade===ui.filterValue);
+    if(ui.filterValue!=='전체') arr=arr.filter(s=>s.grade===ui.filterValue);
   }
   if(ui.filterType==='성별' && ui.filterValue!=='전체') arr=arr.filter(s=>s.gender===ui.filterValue);
   if(ui.filterType==='팀' && ui.filterValue!=='전체') arr=arr.filter(s=>(s.teams||[]).includes(ui.filterValue));
@@ -284,26 +296,28 @@ function topbar(){
   return `<div class="top"><div><div class="eyebrow">${displayDate()} · ${esc(state.settings.department||'교회학교')}</div><div class="title">${title}</div></div><div class="icons">${['talent','attendance'].includes(ui.tab)?`<button class="icon historyIcon" data-act="undo" ${ui.undo.length?'':'disabled'} aria-label="실행 취소">${historyArrow('left')}</button><button class="icon historyIcon" data-act="redo" ${ui.redo.length?'':'disabled'} aria-label="다시 실행">${historyArrow('right')}</button>`:''}<button class="icon" data-act="shareMenu" aria-label="공유">↗</button></div></div>`;
 }
 function dateControl(){ return `<div class="card"><div class="row"><div><div class="label">기록 날짜</div><div class="muted">날짜를 바꾸면 그날 기록이 열립니다.</div></div><div class="datePick"><input id="mainDate" class="input" type="date" value="${ui.date}"></div></div></div>`; }
-function hero(){ const list=scopedStudents(); const c=attendanceCounts(list); const present=c.present; return `<section class="hero"><div class="heroGrid"><div><div class="big">${present}<span>/${list.length}</span></div><div class="heroLabel">현재 범위 출석</div></div><div class="heroRight"><strong>${fmt(sessionTotal())}</strong><div class="heroLabel">이날 총 달란트</div></div></div></section>`; }
+function hero(){ const list=filterStudents(); const c=attendanceCounts(list); const present=c.present; return `<section class="hero"><div class="heroGrid"><div><div class="big">${present}<span>/${list.length}</span></div><div class="heroLabel">현재 범위 출석</div></div><div class="heroRight"><strong>${fmt(sessionTotal())}</strong><div class="heroLabel">이날 총 달란트</div></div></div></section>`; }
 
 function talentView(){
   const list=filterStudents();
-  const last=ensureSession().transactions.find(t=>t.id===ui.lastTxId);
+  const last=(state.sessions?.[ui.date]?.transactions||[]).find(t=>t.id===ui.lastTxId);
   const selectedLabel=ui.selected.size?`선택 ${ui.selected.size}명`:'학생을 선택해 주세요';
+  const talentScope=ui.filterType==='팀'?`팀:${ui.filterValue}`:ui.filterValue;
   return `${dateControl()}${hero()}
     <div class="viewActionRow"><button class="shareAction" data-act="shareCurrentTalent">공유</button><span>현재 범위 달란트 현황을 바로 공유합니다.</span></div>
-    <div class="chips">${['학년'].map(x=>`<button class="chip ${ui.filterType===x?'active':''}" data-filtertype="${x}">${x}</button>`).join('')}</div>
-    <div class="chips">${filterOptions().map(v=>`<button class="chip ${ui.filterValue===v?'active':''}" data-filtervalue="${attr(v)}">${esc(v)}</button>`).join('')}</div>
+    ${scopeChoiceHtml('talent',talentScope,true)}
     <div class="sectionHead"><div><div class="sectionTitle">학생 선택</div><div class="muted">대상을 선택하고 금액을 누르면 바로 지급됩니다.</div></div><span class="badge">${selectedLabel}</span></div>
     <div class="list">${list.map(st=>`<button class="studentRow ${st.photo?'hasPhoto':'noPhoto'} ${ui.selected.has(st.id)?'selected':''}" data-selectstudent="${st.id}">${avatarCell(st)}<span><span class="studentName">${esc(st.name)}</span><span class="studentMeta">${esc(st.grade||'학년 미지정')}${att(st).present?' · 출석':''}</span></span><span class="amount ${todayAmt(st.id)<0?'negative':''}">${todayAmt(st.id)>0?'+':''}${fmt(todayAmt(st.id))}</span></button>`).join('')||'<div class="empty">학생이 없습니다.</div>'}</div>
     <div class="bottomSheet talentPanel"><div class="targetRow"><strong>${selectedLabel}</strong><div class="compactActions"><button class="mini" data-act="selectAllVisible">전체 선택</button><button class="mini" data-act="selectVisible">출석자 선택</button><button class="mini" data-act="clearSelect">해제</button><button class="mini resetMini" data-act="talentResetMenu">리셋</button>${last?`<button class="mini" data-act="shareLast">방금 기록 공유</button>`:''}</div></div><div class="talentActionLine"><button class="signMode minus ${ui.sign<0?'active':''}" data-act="toggleMinus">− 차감</button><span>${ui.sign<0?'차감할 금액을 누르세요':'금액을 누르면 바로 지급됩니다'}</span></div><div class="moneyRow">${state.settings.amounts.slice(0,4).map(a=>`<button class="money ${ui.sign<0?'minus':''}" data-money="${a}">${ui.sign<0?'−':'+'}${fmt(a)}</button>`).join('')}<button class="money mult" data-act="x2" ${last&&last.kind!=='reset'&&!last.x2Applied?'':'disabled'}>×2</button></div></div>`;
 }
 
 function attendanceScopeList(){
-  let list=state.settings.adminMode?active():scopedStudents('내 담당');
-  if(ui.attendanceGrade==='내 담당') list=scopedStudents('내 담당');
-  else if(ui.attendanceGrade!=='전체') list=list.filter(s=>s.grade===ui.attendanceGrade);
-  return sortStudents(list,state.settings.attendanceSort||'attendance');
+  const list=scopeStudents(ui.attendanceGrade);
+  return [...list].sort((a,b)=>{
+    const A=longAbsenceInfo(a), B=longAbsenceInfo(b);
+    if(A.long!==B.long) return A.long?1:-1;
+    return koName(a,b);
+  });
 }
 function attendanceDraftKey(){ return `${ui.date}|${ui.attendanceGrade}`; }
 function attendanceGradeSummary(){
@@ -314,16 +328,14 @@ function attendanceView(){
   if(state.settings.teacherAttendanceEnabled && ui.attendanceMode==='teacher') return teacherAttendanceView();
   const list=attendanceScopeList(); const c=attendanceCounts(list); const present=c.present;
   const long=list.filter(s=>longAbsenceInfo(s).long), regular=list.filter(s=>!longAbsenceInfo(s).long);
-  const listHtml=(state.settings.attendanceSort==='attendance'&&long.length)
+  const listHtml=long.length
     ? `${regular.map(st=>attendanceRow(st,false)).join('')}<div class="listSection"><strong>장기 미출석 · 관리</strong><small>${long.length}명 · 기본 2개월, 설정에서 변경 가능</small></div>${long.map(st=>attendanceRow(st,true)).join('')}`
-    : list.map(st=>attendanceRow(st,false)).join('');
-  const scopeChips=scopeOptionsWithManaged();
+    : regular.map(st=>attendanceRow(st,false)).join('');
   return `${dateControl()}
     ${state.settings.teacherAttendanceEnabled?`<div class="seg"><button class="segBtn active" data-attmode="student">학생</button><button class="segBtn" data-attmode="teacher">교사</button></div>`:''}
-    <div class="attendanceSummary attendanceSummaryStrong"><div class="attendanceSummaryMain"><div><div class="label lightLabel">${esc(ui.attendanceGrade)} 출석</div><div class="attendanceBig"><strong>${present}</strong><span>/ ${list.length}명</span></div><div class="summarySub">결석 ${c.absent} · 지각 ${c.late} · 새친구 ${c.new}</div></div><button class="shareAction" data-act="shareCurrentAttendance">공유</button></div><div class="attendanceBulk"><button class="primary" data-act="attendanceSelectAll">전체 선택</button><button class="secondary darkSecondary" data-act="attendanceClearAll">전체 해제</button></div></div>
-    ${ui.attendanceGrade==='전체'?attendanceGradeSummary():''}
-    ${state.settings.adminMode?`<div class="chips">${scopeChips.map(v=>`<button class="chip ${ui.attendanceGrade===v?'active':''}" data-attgrade="${attr(v)}">${esc(v)}</button>`).join('')}</div>`:''}
-    <div class="sortBar"><span>정렬</span>${[['attendance','출석 우선'],['name','가나다'],['grade','학년'],['custom','사용자']].map(([v,l])=>`<button class="sortBtn ${state.settings.attendanceSort===v?'active':''}" data-att-sort="${v}">${l}</button>`).join('')}</div>
+    <div class="attendanceSummary attendanceSummaryStrong"><div class="attendanceSummaryMain"><div><div class="label lightLabel">${esc(scopeLabel(ui.attendanceGrade))} 출석</div><div class="attendanceBig"><strong>${present}</strong><span>/ ${list.length}명</span></div><div class="summarySub">결석 ${c.absent} · 지각 ${c.late} · 새친구 ${c.new}</div></div><button class="shareAction" data-act="shareCurrentAttendance">공유</button></div><div class="attendanceBulk"><button class="primary" data-act="attendanceSelectAll">전체 선택</button><button class="secondary darkSecondary" data-act="attendanceClearAll">전체 해제</button></div></div>
+    ${scopeChoiceHtml('attendance',ui.attendanceGrade,true)}
+    <div class="sortBar"><span>정렬</span><button class="sortBtn active" disabled>가나다</button></div>
     <div class="list">${listHtml||'<div class="empty">학생이 없습니다.</div>'}</div>`;
 }
 function attendanceRow(st,isLong=false){
@@ -347,7 +359,7 @@ function teacherAttendanceView(){
 }
 
 function analyticsDates(range){
-  const keys=Object.keys(state.sessions).filter(k=>Object.keys(state.sessions[k]?.attendance||{}).length>0).sort();
+  const keys=Object.keys(state.sessions).filter(k=>typeof attendanceSessionRecorded==='function'?attendanceSessionRecorded(k):Object.keys(state.sessions[k]?.attendance||{}).length>0).sort();
   if(range==='전체') return keys;
   const now=new Date(`${ui.date}T12:00:00`); let start;
   if(range==='이번 달') start=new Date(now.getFullYear(),now.getMonth(),1);
@@ -379,10 +391,10 @@ function recordsView(){
 }
 
 function studentsView(){
-  let list=(ui.studentGrade==='내 담당'?scopedStudents('내 담당'):ui.studentGrade==='전체'?scopedStudents('전체'):scopedStudents(ui.studentGrade));
+  let list=scopeStudents(ui.studentGrade);
   list=sortStudents(list,state.settings.studentSort||'name');
   return `<div class="card"><div class="row"><div><div class="label">학생 명부</div><div class="muted">이름을 누르면 연락처·주소·출석·달란트 이력을 봅니다.</div></div><div class="headActions"><button class="secondary nowrap" data-act="manageStudentList">명단 정리</button><button class="primary nowrap" data-act="addStudent">학생 추가</button></div></div></div>
-    <div class="chips">${scopeOptionsWithManaged().map(v=>`<button class="chip ${ui.studentGrade===v?'active':''}" data-stugrade="${attr(v)}">${esc(v)}</button>`).join('')}</div>
+    ${scopeChoiceHtml('students',ui.studentGrade,true)}
     <div class="sortBar"><span>정렬</span>${[['name','가나다'],['grade','학년'],['custom','사용자']].map(([v,l])=>`<button class="sortBtn ${state.settings.studentSort===v?'active':''}" data-stu-sort="${v}">${l}</button>`).join('')}</div>
     <div class="list">${list.map(st=>`<button class="studentRow ${st.photo?'hasPhoto':'noPhoto'}" data-detail="${st.id}">${avatarCell(st)}<span><span class="studentName">${esc(st.name)}</span><span class="studentMeta">${esc(st.grade||'학년 미지정')}${st.gender?' · '+esc(st.gender):''}${(st.teams||[]).length?' · '+esc(st.teams.join(', ')):''}</span></span><span class="amount">${fmt(totalAmt(st.id))}<small>누적</small></span></button>`).join('')||'<div class="empty">학생이 없습니다.</div>'}</div>
     <div class="divider"></div>
@@ -430,7 +442,7 @@ function modalHtml(){
   if(ui.modal.type==='detail'){
     const st=studentById(ui.modal.id); if(!st)return '';
     const phoneBtns=contactButtons(st.phone); const parentBtns=contactButtons(st.parentPhone); const parent2Btns=contactButtons(st.parent2Phone);
-    const attendanceHistory=Object.keys(state.sessions).sort().reverse().filter(k=>att(st,k).status!=='unset').slice(0,20);
+    const attendanceHistory=Object.keys(state.sessions).sort().reverse().filter(k=>(typeof attendanceSessionRecorded!=='function'||attendanceSessionRecorded(k))&&state.sessions[k]?.attendance?.[st.id]).slice(0,20);
     const txHistory=[]; Object.keys(state.sessions).sort().reverse().forEach(k=>(state.sessions[k].transactions||[]).filter(t=>(t.studentIds||[]).includes(st.id)).forEach(t=>txHistory.push({k,t})));
     return modal(`<div class="modalTitleRow"><div class="detailHead">${st.photo?avatar(st,'detailPhoto'):''}<div><div class="titleSmall">${esc(st.name)}</div><div class="muted">${esc(st.grade||'학년 미지정')} · 누적 ${fmt(totalAmt(st.id))} 달란트</div></div></div>${close}</div><div class="detailActions"><button class="secondary nowrap" data-act="editStudent" data-id="${st.id}">수정</button><button class="secondary nowrap" data-act="photo" data-id="${st.id}">${st.photo?'사진 변경':'사진 추가'}</button><button class="secondary nowrap ${st.longTermManual?'manualOn':''}" data-act="toggleLongTerm" data-id="${st.id}">${st.longTermManual?'장기 지정 해제':'장기 미출석 지정'}</button></div><div class="card kvCard">${kv('생일',st.birthday)}${kv('성별',st.gender)}${kv('학생 전화',st.phone,phoneBtns)}${kv('보호자 1',`${st.parentName||''}${st.parentRelation?` (${st.parentRelation})`:''}`)}${kv('보호자 1 연락',st.parentPhone,parentBtns)}${kv('보호자 2',`${st.parent2Name||''}${st.parent2Relation?` (${st.parent2Relation})`:''}`)}${kv('보호자 2 연락',st.parent2Phone,parent2Btns)}${kv('학교',st.school)}${kv('형제관계',st.siblings)}${kv('주소',st.address)}${kv('메모',st.memo)}</div><div class="card"><div class="sectionTitle">최근 출석</div>${attendanceHistory.map(k=>`<div class="history"><span><strong>${displayDate(k)}</strong><small>${esc(att(st,k).memo||'')}</small></span><strong>${statusLabel(att(st,k).status)}</strong></div>`).join('')||'<div class="muted">출석 기록 없음</div>'}</div><div class="card"><div class="sectionTitle">최근 달란트</div>${txHistory.slice(0,20).map(({k,t})=>`<div class="history"><span><strong>${displayDate(k)}</strong><small>${t.kind==='reset'?'잔액 리셋 · ':t.multiplier===2?'×2 · ':''}${esc(t.reason||'')}</small></span><strong class="${t.kind==='reset'?'resetText':t.amount<0?'negative':'positive'}">${t.kind==='reset'?'0으로':`${t.amount>0?'+':''}${fmt(t.amount)}`}</strong></div>`).join('')||'<div class="muted">달란트 기록 없음</div>'}</div>`);
   }
@@ -447,7 +459,7 @@ function modalHtml(){
   }
   if(ui.modal.type==='teacherDetail'){
     const t=teacherById(ui.modal.id); if(!t)return '';
-    const history=Object.keys(state.teacherSessions).sort().reverse().filter(k=>teacherAtt(t,k).status!=='unset').slice(0,20);
+    const history=Object.keys(state.teacherSessions).sort().reverse().filter(k=>(typeof teacherAttendanceSessionRecorded!=='function'||teacherAttendanceSessionRecorded(k))&&state.teacherSessions[k]?.attendance?.[t.id]).slice(0,20);
     return modal(`<div class="modalTitleRow"><div><div class="titleSmall">${esc(t.name)}</div><div class="muted">${esc(t.role||'담당 미지정')}</div></div>${close}</div>${t.phone?`<div class="contactBar"><a class="primary linkBtn" href="tel:${phoneUri(t.phone)}">☎ 전화</a><a class="secondary linkBtn" href="sms:${phoneUri(t.phone)}">✉ 문자</a></div>`:''}<div class="card">${kv('생일',t.birthday)}${kv('전화번호',t.phone,contactButtons(t.phone))}${kv('비상 연락처',t.emergencyPhone,contactButtons(t.emergencyPhone))}${kv('비고',t.memo)}</div><div class="card"><div class="sectionTitle">출석 이력</div>${history.map(k=>`<div class="history"><span><strong>${displayDate(k)}</strong><small>${esc(teacherAtt(t,k).reason||'')}</small></span><strong>${teacherStatusLabel(teacherAtt(t,k).status)}</strong></div>`).join('')||'<div class="muted">기록 없음</div>'}</div>`);
   }
   if(ui.modal.type==='studentOrder'){
@@ -508,9 +520,22 @@ function kv(k,v,extra=''){ if(!v && !extra)return ''; return `<div class="kv"><s
 function contactButtons(phone){ if(!phone)return ''; const p=phoneUri(phone); return `<a class="tinyLink" href="tel:${p}">전화</a><a class="tinyLink" href="sms:${p}">문자</a>`; }
 
 function bind(){
-  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ui.tab=b.dataset.tab;ui.modal=null;render();});
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{
+    ui.tab=b.dataset.tab;
+    if(!state.settings.adminMode){
+      const preferred=state.settings.managementScope||((state.settings.managedGrades||[])[0])||'전체';
+      if(ui.tab==='attendance')ui.attendanceGrade=preferred;
+      if(ui.tab==='talent'){ui.filterType='학년';ui.filterValue=preferred;}
+      if(ui.tab==='records')ui.analyticsScope=preferred;
+      if(ui.tab==='students')ui.studentGrade=preferred;
+    }
+    ui.scopeMenu=null;
+    ui.modal=null;render();
+  });
   const date=document.getElementById('mainDate'); if(date) date.onchange=e=>{ui.date=e.target.value;ui.lastTxId=null;ui.attendanceDraft=null;ui.attendanceDraftKey='';ui.teacherAttendanceDraft=null;ui.teacherAttendanceDraftKey='';render();};
   document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>handleAct(b.dataset.act,b));
+  document.querySelectorAll('[data-scope-toggle]').forEach(b=>b.onclick=()=>{const v=b.dataset.scopeToggle;ui.scopeMenu=ui.scopeMenu===v?null:v;render();});
+  document.querySelectorAll('[data-scope-pick]').forEach(b=>b.onclick=()=>{const v=b.dataset.scopePick,view=b.dataset.scopeView;ui.scopeMenu=null;if(view==='talent'){if(v.startsWith('팀:')){ui.filterType='팀';ui.filterValue=v.slice(2);}else{ui.filterType='학년';ui.filterValue=v;}ui.selected.clear();}else if(view==='attendance'){ui.attendanceGrade=v;}else if(view==='records'){ui.analyticsScope=v;}else if(view==='students'){ui.studentGrade=v;}render();});
   document.querySelectorAll('[data-filtertype]').forEach(b=>b.onclick=()=>{ui.filterType=b.dataset.filtertype;ui.filterValue='전체';ui.selected.clear();render();});
   document.querySelectorAll('[data-filtervalue]').forEach(b=>b.onclick=()=>{ui.filterValue=b.dataset.filtervalue;ui.selected.clear();render();});
   document.querySelectorAll('[data-selectstudent]').forEach(b=>b.onclick=()=>{const id=b.dataset.selectstudent;ui.selected.has(id)?ui.selected.delete(id):ui.selected.add(id);render();});
@@ -627,29 +652,113 @@ function handleAct(act,b){
 
 function setStudentStatus(id,status){if(status==='present')return toggleStudentAttendance(id);if(status==='late')return toggleStudentAttendanceFlag(id,'late');if(status==='new')return toggleStudentAttendanceFlag(id,'newcomer');}
 
-function writeStudentAttendance(id,a){ensureSession().attendance[id]={present:!!a.present,late:!!a.late,newcomer:!!a.newcomer,status:a.present?'present':'absent',memo:a.memo||''};}
+function writeStudentAttendance(id,a,k=ui.date){const sess=ensureSession(k);sess.attendance[id]={present:!!a.present,late:!!a.late,newcomer:!!a.newcomer,status:a.present?'present':'absent',memo:a.memo||''};}
+function studentEntryMeaningful(a){return !!a && (!!a.present || !!a.late || !!a.newcomer);}
+function teacherEntryMeaningful(a){return !!a && (!!a.present || !!a.late);}
+function cleanupStudentAttendanceSession(k=ui.date){
+  const sess=state.sessions?.[k];if(!sess)return;
+  const meaningful=Object.values(sess.attendance||{}).some(studentEntryMeaningful);
+  if(!meaningful){
+    sess.attendance={};delete sess.attendanceStarted;
+    if(!(sess.transactions||[]).length)delete state.sessions[k];
+  }
+}
+function cleanupTeacherAttendanceSession(k=ui.date){
+  const sess=state.teacherSessions?.[k];if(!sess)return;
+  const meaningful=Object.values(sess.attendance||{}).some(teacherEntryMeaningful);
+  if(!meaningful)delete state.teacherSessions[k];
+}
 function initializeAttendanceScope(list){const sess=ensureSession();for(const st of list){if(!Object.prototype.hasOwnProperty.call(sess.attendance,st.id))writeStudentAttendance(st.id,{present:false,late:false,newcomer:false,memo:''});}}
-function toggleStudentAttendance(id){const st=studentById(id);if(!st)return;pushUndo();initializeAttendanceScope(attendanceScopeList());const a=att(st);a.present=!a.present;if(!a.present){a.late=false;a.newcomer=false;}writeStudentAttendance(id,a);save();render();}
-function toggleStudentAttendanceFlag(id,flag){const st=studentById(id);if(!st)return;pushUndo();initializeAttendanceScope(attendanceScopeList());const a=att(st);a[flag]=!a[flag];if(a[flag])a.present=true;writeStudentAttendance(id,a);save();render();}
-function setAllStudentAttendance(v){const list=attendanceScopeList();if(!list.length)return toast('학생이 없습니다.');pushUndo();initializeAttendanceScope(list);for(const st of list){const a=att(st);a.present=!!v;if(!v){a.late=false;a.newcomer=false;}writeStudentAttendance(st.id,a);}save();toast(v?`${list.length}명 전체 출석 선택`:'전체 출석을 해제했습니다.');render();}
-function writeTeacherAttendance(id,a){ensureTeacherSession().attendance[id]={present:!!a.present,late:!!a.late,status:a.present?'present':'absent',reason:a.reason||''};}
+function toggleStudentAttendance(id){
+  const st=studentById(id);if(!st)return;pushUndo();
+  const current=att(st);
+  if(!current.present){
+    initializeAttendanceScope(attendanceScopeList());
+    writeStudentAttendance(id,{...current,present:true});
+  }else{
+    writeStudentAttendance(id,{...current,present:false,late:false,newcomer:false});
+    cleanupStudentAttendanceSession();
+  }
+  save();render();
+}
+function toggleStudentAttendanceFlag(id,flag){
+  const st=studentById(id);if(!st)return;pushUndo();const current=att(st);
+  const next=!current[flag];
+  if(next)initializeAttendanceScope(attendanceScopeList());
+  writeStudentAttendance(id,{...current,[flag]:next,present:next?true:current.present});
+  if(!next)cleanupStudentAttendanceSession();
+  save();render();
+}
+function setAllStudentAttendance(v){
+  const list=attendanceScopeList();if(!list.length)return toast('학생이 없습니다.');pushUndo();
+  if(v){
+    initializeAttendanceScope(list);
+    for(const st of list){const a=att(st);writeStudentAttendance(st.id,{...a,present:true});}
+  }else{
+    const sess=state.sessions?.[ui.date];
+    if(sess){
+      for(const st of list)delete sess.attendance?.[st.id];
+      cleanupStudentAttendanceSession();
+    }
+  }
+  save();toast(v?`${list.length}명 전체 출석 선택`:'현재 목록의 출석 체크를 해제했습니다.');render();
+}
+function writeTeacherAttendance(id,a,k=ui.date){const sess=ensureTeacherSession(k);sess.attendance[id]={present:!!a.present,late:!!a.late,status:a.present?'present':'absent',reason:a.reason||''};}
 function initializeTeacherAttendance(list){const sess=ensureTeacherSession();for(const t of list){if(!Object.prototype.hasOwnProperty.call(sess.attendance,t.id))writeTeacherAttendance(t.id,{present:false,late:false,reason:''});}}
-function toggleTeacherAttendance(id){const t=teacherById(id);if(!t)return;pushUndo();const list=activeTeachers();initializeTeacherAttendance(list);const a=teacherAtt(t);a.present=!a.present;if(!a.present)a.late=false;writeTeacherAttendance(id,a);save();render();}
-function toggleTeacherAttendanceFlag(id,flag){const t=teacherById(id);if(!t)return;pushUndo();const list=activeTeachers();initializeTeacherAttendance(list);const a=teacherAtt(t);a[flag]=!a[flag];if(a[flag])a.present=true;writeTeacherAttendance(id,a);save();render();}
-function setAllTeacherAttendance(v){const list=activeTeachers();if(!list.length)return toast('교사 명단이 없습니다.');pushUndo();initializeTeacherAttendance(list);for(const t of list){const a=teacherAtt(t);a.present=!!v;if(!v)a.late=false;writeTeacherAttendance(t.id,a);}save();toast(v?`${list.length}명 교사 전체 출석 선택`:'교사 전체 출석을 해제했습니다.');render();}
+function toggleTeacherAttendance(id){
+  const t=teacherById(id);if(!t)return;pushUndo();const current=teacherAtt(t);
+  if(!current.present){initializeTeacherAttendance(activeTeachers());writeTeacherAttendance(id,{...current,present:true});}
+  else{writeTeacherAttendance(id,{...current,present:false,late:false});cleanupTeacherAttendanceSession();}
+  save();render();
+}
+function toggleTeacherAttendanceFlag(id,flag){
+  const t=teacherById(id);if(!t)return;pushUndo();const current=teacherAtt(t),next=!current[flag];
+  if(next)initializeTeacherAttendance(activeTeachers());
+  writeTeacherAttendance(id,{...current,[flag]:next,present:next?true:current.present});
+  if(!next)cleanupTeacherAttendanceSession();
+  save();render();
+}
+function setAllTeacherAttendance(v){
+  const list=activeTeachers();if(!list.length)return toast('교사 명단이 없습니다.');pushUndo();
+  if(v){initializeTeacherAttendance(list);for(const t of list){const a=teacherAtt(t);writeTeacherAttendance(t.id,{...a,present:true});}}
+  else{delete state.teacherSessions[ui.date];}
+  save();toast(v?`${list.length}명 교사 전체 출석 선택`:'교사 전체 출석 체크를 해제했습니다.');render();
+}
 function doubleLastTalent(){const tx=ensureSession().transactions.find(t=>t.id===ui.lastTxId);if(!tx||tx.kind==='reset')return toast('2배로 바꿀 방금 기록이 없습니다.');if(tx.x2Applied)return toast('방금 기록은 이미 2배가 적용되었습니다.');pushUndo();tx.amount=Number(tx.amount||0)*2;tx.multiplier=2;tx.x2Applied=true;save();toast(`방금 기록을 ${tx.amount>0?'+':''}${fmt(tx.amount)}로 2배 적용했습니다.`);render();}
-function saveStudentMemoAuto(id,el){const st=studentById(id);if(!st||!el)return;const next=el.value;const prev=att(st).memo||'';if(prev===next)return;const a=att(st);ensureSession().attendance[id]={present:a.present,late:a.late,newcomer:a.newcomer,status:a.present?'present':'absent',memo:next};save();const m=document.querySelector(`[data-memo-saved="${CSS.escape(id)}"]`);if(m){m.textContent='저장됨';setTimeout(()=>{if(m)m.textContent='';},800);}}
+function saveStudentMemoAuto(id,el){
+  const st=studentById(id);if(!st||!el)return;const sess=state.sessions?.[ui.date];
+  if(!sess?.attendance?.[id]){if(String(el.value||'').trim())toast('먼저 출석을 체크한 뒤 비고를 입력해 주세요.');return;}
+  const next=el.value,prev=att(st).memo||'';if(prev===next)return;const a=att(st);writeStudentAttendance(id,{...a,memo:next});save();const m=document.querySelector(`[data-memo-saved="${CSS.escape(id)}"]`);if(m){m.textContent='저장됨';setTimeout(()=>{if(m)m.textContent='';},800);}
+}
 function startAttendanceDraft(edit=false){
   const list=attendanceScopeList(); if(!list.length)return toast('출석 대상 학생이 없습니다.');
-  ui.attendanceDraft=new Set(edit?list.filter(st=>presentStatus(att(st).status)).map(st=>st.id):list.map(st=>st.id)); ui.attendanceDraftKey=attendanceDraftKey(); render();
+  ui.attendanceDraft=new Set(edit?list.filter(st=>att(st).present).map(st=>st.id):list.map(st=>st.id)); ui.attendanceDraftKey=attendanceDraftKey(); render();
 }
 function toggleAttendanceDraft(id){ if(!(ui.attendanceDraft instanceof Set))return; ui.attendanceDraft.has(id)?ui.attendanceDraft.delete(id):ui.attendanceDraft.add(id); render(); }
-function confirmAttendanceDraft(){ const list=attendanceScopeList(); if(!(ui.attendanceDraft instanceof Set))return; pushUndo(); const sess=ensureSession(); for(const st of list){const old=sess.attendance[st.id]||{status:'unset',memo:''}; const selected=ui.attendanceDraft.has(st.id); const next=selected?(['late','new'].includes(old.status)?old.status:'present'):'absent'; sess.attendance[st.id]={...old,status:next};} const n=ui.attendanceDraft.size; ui.attendanceDraft=null;ui.attendanceDraftKey='';save();toast(`${n}/${list.length}명 출석 저장`);render(); }
-function startTeacherAttendanceDraft(edit=false){ const list=activeTeachers(); if(!list.length)return toast('교사 명단이 없습니다.'); ui.teacherAttendanceDraft=new Set(edit?list.filter(t=>['present','late'].includes(teacherAtt(t).status)).map(t=>t.id):list.map(t=>t.id));ui.teacherAttendanceDraftKey=teacherAttendanceDraftKey();render(); }
+function confirmAttendanceDraft(){
+  const list=attendanceScopeList(); if(!(ui.attendanceDraft instanceof Set))return;pushUndo();
+  if(ui.attendanceDraft.size){
+    initializeAttendanceScope(list);
+    for(const st of list){const a=att(st),selected=ui.attendanceDraft.has(st.id);writeStudentAttendance(st.id,{...a,present:selected,late:selected&&a.late,newcomer:selected&&a.newcomer});}
+  }else{
+    const sess=state.sessions?.[ui.date];if(sess){for(const st of list)delete sess.attendance?.[st.id];cleanupStudentAttendanceSession();}
+  }
+  const n=ui.attendanceDraft.size;ui.attendanceDraft=null;ui.attendanceDraftKey='';save();toast(n?`${n}/${list.length}명 출석 저장`:'출석 체크가 없어 기록을 만들지 않았습니다.');render();
+}
+function startTeacherAttendanceDraft(edit=false){ const list=activeTeachers(); if(!list.length)return toast('교사 명단이 없습니다.'); ui.teacherAttendanceDraft=new Set(edit?list.filter(t=>teacherAtt(t).present).map(t=>t.id):list.map(t=>t.id));ui.teacherAttendanceDraftKey=teacherAttendanceDraftKey();render(); }
 function toggleTeacherAttendanceDraft(id){if(!(ui.teacherAttendanceDraft instanceof Set))return;ui.teacherAttendanceDraft.has(id)?ui.teacherAttendanceDraft.delete(id):ui.teacherAttendanceDraft.add(id);render();}
-function confirmTeacherAttendanceDraft(){const list=activeTeachers();if(!(ui.teacherAttendanceDraft instanceof Set))return;pushUndo();const sess=ensureTeacherSession();for(const t of list){const old=sess.attendance[t.id]||{status:'unset',reason:''};const selected=ui.teacherAttendanceDraft.has(t.id);const next=selected?(old.status==='late'?'late':'present'):'absent';sess.attendance[t.id]={...old,status:next};}const n=ui.teacherAttendanceDraft.size;ui.teacherAttendanceDraft=null;ui.teacherAttendanceDraftKey='';save();toast(`${n}/${list.length}명 교사 출석 저장`);render();}
+function confirmTeacherAttendanceDraft(){
+  const list=activeTeachers();if(!(ui.teacherAttendanceDraft instanceof Set))return;pushUndo();
+  if(ui.teacherAttendanceDraft.size){initializeTeacherAttendance(list);for(const t of list){const a=teacherAtt(t),selected=ui.teacherAttendanceDraft.has(t.id);writeTeacherAttendance(t.id,{...a,present:selected,late:selected&&a.late});}}
+  else delete state.teacherSessions[ui.date];
+  const n=ui.teacherAttendanceDraft.size;ui.teacherAttendanceDraft=null;ui.teacherAttendanceDraftKey='';save();toast(n?`${n}/${list.length}명 교사 출석 저장`:'출석 체크가 없어 기록을 만들지 않았습니다.');render();
+}
 function setTeacherStatus(id,status){if(status==='present')return toggleTeacherAttendance(id);if(status==='late')return toggleTeacherAttendanceFlag(id,'late');}
-function saveTeacherReasonAuto(id,el){const t=teacherById(id);if(!t||!el)return;const next=el.value;const prev=teacherAtt(t).reason||'';if(prev===next)return;const a=teacherAtt(t);ensureTeacherSession().attendance[id]={present:a.present,late:a.late,status:a.present?'present':'absent',reason:next};save();const m=document.querySelector(`[data-teacher-saved="${CSS.escape(id)}"]`);if(m){m.textContent='저장됨';setTimeout(()=>{if(m)m.textContent='';},800);}}
+function saveTeacherReasonAuto(id,el){
+  const t=teacherById(id);if(!t||!el)return;const sess=state.teacherSessions?.[ui.date];
+  if(!sess?.attendance?.[id]){if(String(el.value||'').trim())toast('먼저 출석을 체크한 뒤 비고를 입력해 주세요.');return;}
+  const next=el.value,prev=teacherAtt(t).reason||'';if(prev===next)return;const a=teacherAtt(t);writeTeacherAttendance(id,{...a,reason:next});save();const m=document.querySelector(`[data-teacher-saved="${CSS.escape(id)}"]`);if(m){m.textContent='저장됨';setTimeout(()=>{if(m)m.textContent='';},800);}
+}
 
 function bulkDeactivate(){
   const ids=[...ui.bulkSelected]; if(!ids.length)return toast('정리할 학생을 선택해 주세요.');
@@ -767,9 +876,9 @@ async function shareCurrentTeacherAttendance(){
   await nativeShare({title:'교사 출석',text:lines.join('\n')});
 }
 function deleteSessionRecord(k){
-  if(!state.sessions[k]||!Object.keys(state.sessions[k].attendance||{}).length)return toast('삭제할 출석 기록이 없습니다.');
+  if(typeof attendanceSessionRecorded==='function'?!attendanceSessionRecorded(k):(!state.sessions[k]||!Object.keys(state.sessions[k].attendance||{}).length))return toast('삭제할 출석 기록이 없습니다.');
   if(!confirm(`${displayDate(k)}의 출석 기록을 삭제할까요?\n달란트 기록과 학생 기본정보는 유지되며 되돌리기로 복구할 수 있습니다.`))return;
-  pushUndo(); state.sessions[k].attendance={}; if(!(state.sessions[k].transactions||[]).length)delete state.sessions[k]; save(); toast('출석 기록을 삭제했습니다.'); render();
+  pushUndo(); state.sessions[k].attendance={};delete state.sessions[k].attendanceStarted;if(!(state.sessions[k].transactions||[]).length)delete state.sessions[k]; save(); toast('출석 기록을 삭제했습니다.'); render();
 }
 async function shareSummary(){ const list=scopedStudents(ui.attendanceGrade==='전체'?(state.settings.managementScope||'전체'):ui.attendanceGrade); const c=attendanceCounts(list); const lines=[`${displayDate()} · ${state.settings.department||'교회학교'}`,`출석 ${c.present}/${list.length} · 결석 ${c.absent} · 지각 ${c.late}`,`달란트 총 ${fmt(sessionTotal())}`]; const gradesList=grades(); gradesList.forEach(g=>{const ss=active().filter(s=>s.grade===g); if(ss.length){const cc=attendanceCounts(ss); const talent=ss.reduce((n,s)=>n+todayAmt(s.id),0); lines.push(`${g} ${cc.present}/${ss.length} · ${fmt(talent)}달란트`);}}); await nativeShare({title:'오늘 요약',text:lines.join('\n')});ui.modal=null;render(); }
 async function shareLast(){ const tx=ensureSession().transactions.find(t=>t.id===ui.lastTxId);if(!tx)return;const names=tx.studentIds.map(id=>studentById(id)?.name).filter(Boolean);if(tx.kind==='reset'){const lines=[`${displayDate()} 달란트 리셋`,...names.map(n=>`${n} · 잔액 0으로 리셋`),`총 ${names.length}명`];return nativeShare({title:'달란트 리셋',text:lines.join('\n')});}const lines=[`${displayDate()} 달란트 ${tx.amount<0?'차감':'지급'}`,...names.map(n=>`${n} ${tx.amount>0?'+':''}${tx.amount}`),`${tx.multiplier===2?`기본 ${tx.base} ×2 · `:''}총 ${fmt(tx.amount*names.length)}달란트`];await nativeShare({title:'달란트 기록',text:lines.join('\n')}); }
