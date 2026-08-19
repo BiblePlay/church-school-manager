@@ -490,3 +490,77 @@ html[data-theme="dark"] .scopeChooserBtn.active{background:#ffd21f!important;col
 html[data-theme="dark"] .scopeChooserBtn.active span,html[data-theme="dark"] .scopeChooserBtn.active b{color:#342f19!important}
 html[data-theme="dark"] .scopeChooserPanel{background:#242422!important;border-color:var(--line)!important;box-shadow:none}
 html[data-theme="dark"] .scopeChooserBtn:before{border-color:#ddd!important}
+
+/* v1.5.3.20 FINAL — scope, settings and attendance-edit polish */
+.scopeChooser{margin:6px 0 10px!important}
+.scopeChooserBtn{min-height:36px!important;padding:0 10px!important;gap:5px!important;border:1px solid #d8d4cb!important;background:var(--card)!important;box-shadow:none!important}
+.scopeChooserBtn:before{width:6px!important;height:6px!important;background:#ffd21f!important}
+.scopeChooserBtn span{font-size:10px!important;color:var(--muted)!important}
+.scopeChooserBtn strong{font-size:13px!important}
+.scopeChooserBtn b{font-size:8px!important;color:var(--muted)!important}
+.scopeChooserBtn.active{background:var(--card)!important;border:1.5px solid #1b1a17!important;color:var(--ink)!important}
+.scopeChooserBtn.active:before{background:#ffd21f!important}
+.scopeChooserBtn.active span,.scopeChooserBtn.active b{color:var(--muted)!important}
+.scopeChooserPanel{margin-top:6px!important;padding:7px!important;border:1px solid var(--line)!important;border-radius:14px!important;background:var(--card)!important}
+.scopeChooserPanel .chip{min-height:34px!important;padding:7px 11px!important;font-size:11px!important;background:var(--card)!important}
+.scopeChooserPanel .chip.active{background:#ffd21f!important;border-color:#1b1a17!important;color:#111!important}
+
+.editAttendanceTop{grid-template-columns:minmax(0,1fr)!important;display:grid!important}
+.editAttendanceTop .studentIdentity{display:block!important;width:100%!important;min-width:0!important}
+.editAttendanceTop .studentName{display:block!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;font-size:18px!important;line-height:1.2!important}
+.editAttendanceTop .studentMeta{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.modal .attendanceRow .memoLine{grid-template-columns:minmax(0,1fr)!important}
+
+.finalSettingsSection{padding:15px!important}
+.finalSettingsSection .settingsSectionHead{align-items:flex-start!important;margin-bottom:11px!important}
+.finalSettingsSection .settingsSectionHead span{font-size:16px!important;line-height:1.2}
+.finalSettingsSection .settingsSectionHead small{max-width:55%;font-size:10px!important;line-height:1.35;color:var(--muted)!important}
+.settingsCoreCard>.label{font-size:16px!important}
+.settingsActionList{display:grid;gap:8px}
+.settingsAction{width:100%;border:1px solid var(--line);background:var(--card);border-radius:16px;padding:12px 13px;text-align:left;color:var(--ink)}
+.settingsAction strong{display:block;font-size:13px;font-weight:900}
+.settingsAction small{display:block;margin-top:4px;font-size:10px;line-height:1.4;color:var(--muted);font-weight:650}
+.settingsFootnote{margin-top:10px;padding:10px 11px;border-radius:13px;background:var(--soft);font-size:10px;line-height:1.45;color:var(--muted)}
+.settingsFootnote b{color:var(--ink)}
+.settingsReportGrid .secondary{min-height:46px;white-space:normal!important;line-height:1.2}
+.settingsImportPack{margin-top:10px}
+.installGuideBtn{margin-top:10px}
+.dataScopeBadge{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 11px;margin-bottom:9px;border-radius:13px;background:var(--soft);font-size:10px;color:var(--muted)}
+.dataScopeBadge strong{color:var(--ink);font-size:11px}
+.dangerSettingsSection{background:#fffaf9!important;border-color:#eadbd7!important}
+
+.packSummaryCard{margin-bottom:10px!important}
+.packAttendanceChoice{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);background:var(--card);border-radius:16px;padding:12px;margin-bottom:10px}
+.packAttendanceChoice input{margin-top:2px;accent-color:#d7aa00}
+.packAttendanceChoice strong,.packAttendanceChoice small{display:block}
+.packAttendanceChoice strong{font-size:12px;color:var(--ink)}
+.packAttendanceChoice small{font-size:10px;line-height:1.4;color:var(--muted);margin-top:3px}
+.packImportModes{display:grid;gap:9px;margin:10px 0}
+.packImportMode{width:100%;border:1.5px solid #d7d2c8;background:#fff;border-radius:18px;padding:14px;text-align:left;color:#181713}
+.packImportMode strong,.packImportMode small{display:block}
+.packImportMode strong{font-size:14px;font-weight:900}
+.packImportMode small{font-size:10px;line-height:1.45;color:#716c63;margin-top:5px}
+.packImportMode.replace{border-color:#1b1a17;background:#fff9dc}
+
+.dangerGroup{background:var(--card);border:1px solid var(--line);border-radius:17px;margin-bottom:9px;overflow:hidden}
+.dangerGroup summary{cursor:pointer;list-style:none;padding:13px 14px;font-size:13px;font-weight:900;display:flex;justify-content:space-between;align-items:center}
+.dangerGroup summary::-webkit-details-marker{display:none}
+.dangerGroup summary:after{content:'＋';font-size:16px;color:var(--muted)}
+.dangerGroup[open] summary:after{content:'−'}
+.dangerGroupBody{border-top:1px solid var(--line);padding:10px;display:grid;gap:7px}
+.dangerGroupBody small{display:block;margin:-2px 4px 4px;font-size:9px;line-height:1.4;color:var(--muted)}
+.dangerGroup.allReset{border-color:#efc9c4}
+
+@media(max-width:365px){
+  .finalSettingsSection .settingsSectionHead{display:block}
+  .finalSettingsSection .settingsSectionHead small{display:block;max-width:none;text-align:left;margin-top:4px}
+  .settingsReportGrid{grid-template-columns:1fr 1fr!important}
+  .packImportMode{padding:12px}
+}
+
+html[data-theme="dark"] .settingsAction,
+html[data-theme="dark"] .packAttendanceChoice,
+html[data-theme="dark"] .packImportMode,
+html[data-theme="dark"] .dangerGroup{background:var(--card)!important;color:var(--ink)!important;border-color:var(--line)!important}
+html[data-theme="dark"] .packImportMode.replace{background:#3a3315!important;border-color:#8b7718!important}
+html[data-theme="dark"] .dangerSettingsSection{background:#2a2221!important;border-color:#533a36!important}

@@ -24,6 +24,7 @@ state.settings.basePacketVersion = Number(state.settings.basePacketVersion||1);
 save();
 
 ui.studentFilters = ui.studentFilters || {grade:'전체',teacher:'전체',parentFaith:'전체',multicultural:'전체',tag:'전체',team:'전체',gender:'전체',longAbsent:'전체'};
+ui.studentFilters.grade='전체'; ui.studentFilters.team='전체';
 ui.dashboardRange = ui.dashboardRange || 6;
 
 function v14StudentContacts(st){
@@ -53,17 +54,17 @@ function v14FilteredStudents(){
   // 학생 명부의 실제 데이터 원본은 항상 등록된 전체 활성 학생이다.
   let arr=active();
   const f=ui.studentFilters;
-  if(f.grade!=='전체') arr=arr.filter(s=>s.grade===f.grade);
+  // 학년/팀은 각 화면의 '보기' 선택기가 단일 기준이다.
+  // 예전 고급 필터의 grade/team 값이 남아 있어도 목록을 다시 잘라내지 않는다.
   if(f.teacher!=='전체') arr=arr.filter(s=>(s.assignedTeacher||'')===f.teacher);
   if(f.parentFaith!=='전체') arr=arr.filter(s=>(s.parentFaith||'미기재')===f.parentFaith);
   if(f.multicultural!=='전체') arr=arr.filter(s=>f.multicultural==='다문화'?!!s.multicultural:!s.multicultural);
   if(f.tag!=='전체') arr=arr.filter(s=>(s.tags||[]).includes(f.tag));
-  if(f.team!=='전체') arr=arr.filter(s=>(s.teams||[]).includes(f.team));
   if(f.gender!=='전체') arr=arr.filter(s=>(s.gender||'미지정')===f.gender);
   if(f.longAbsent!=='전체') arr=arr.filter(s=>f.longAbsent==='장기 미출석'?longAbsenceInfo(s).long:!longAbsenceInfo(s).long);
   return sortStudents(arr,state.settings.studentSort||'name');
 }
-function v14AppliedFilterCount(){ return Object.values(ui.studentFilters).filter(v=>v&&v!=='전체').length; }
+function v14AppliedFilterCount(){ return Object.entries(ui.studentFilters).filter(([k,v])=>!['grade','team'].includes(k)&&v&&v!=='전체').length; }
 function v14VisitGapDays(st){
   const last=v14LastVisit(st); if(!last?.date)return null;
   return Math.max(0,Math.floor((new Date(`${todayKey()}T12:00:00`)-new Date(`${last.date}T12:00:00`))/86400000));
@@ -79,7 +80,7 @@ studentsView = function(){
   const birthN=list.filter(s=>Number(String(s.birthday||'').slice(5,7))===month).length;
   return `<section class="studentHero"><div><small>학생 관리</small><strong>${list.length}<span>명</span></strong></div><div class="studentHeroStats"><span>장기 미출석 <b>${longN}</b></span><span>${month}월 생일 <b>${birthN}</b></span></div></section>
     <div class="studentActionGrid"><button class="primary" data-act="addStudent">+ 학생 추가</button><button class="contrastBtn" data-act="studentFilter">필터${fcount?` · ${fcount}`:''}</button><button class="contrastBtn" data-act="manageStudentList">명단 정리</button></div>
-    <div class="sortBar strongSort"><span>정렬</span>${[['name','가나다'],['grade','학년'],['attendance','출석 우선'],['custom','사용자']].map(([v,l])=>`<button class="sortBtn ${state.settings.studentSort===v?'active':''}" data-stu-sort="${v}">${l}</button>`).join('')}</div>
+    <div class="sortBar strongSort"><span>정렬</span>${[['name','가나다'],['grade','학년']].map(([v,l])=>`<button class="sortBtn ${state.settings.studentSort===v?'active':''}" data-stu-sort="${v}">${l}</button>`).join('')}</div>
     ${fcount?`<div class="filterSummary"><strong>필터 ${fcount}개 적용</strong><span>${list.length}명만 표시 중</span><button data-act="clearStudentFilters">전체 보기</button></div>`:''}
     <div class="list">${list.map(st=>{const lv=v14LastVisit(st);return `<button class="studentRow ${st.photo?'hasPhoto':'noPhoto'}" data-detail="${st.id}">${avatarCell(st)}<span><span class="studentName">${esc(st.name)}</span><span class="studentMeta">${esc(st.grade||'학년 미지정')}${st.assignedTeacher?' · '+esc(st.assignedTeacher):''}${st.parentFaith&&st.parentFaith!=='미기재'?' · 부모 '+esc(st.parentFaith):''}</span>${lv?`<span class="visitMini">최근 ${esc(lv.date.slice(5).replace('-','/'))} · ${esc((lv.note||'심방').slice(0,22))}</span>`:''}</span><span class="amount">${fmt(totalAmt(st.id))}<small>달란트</small></span></button>`}).join('')||'<div class="empty">조건에 맞는 학생이 없습니다.</div>'}</div>
     <div class="divider"></div>
@@ -201,7 +202,17 @@ teacherAttendanceView=function(){
     ${leave.length?`<div class="listSection"><strong>장기 부재</strong><small>출석 분모에서 제외</small></div><div class="list">${leave.map(t=>`<button class="teacherLeaveRow" data-teacher-detail="${t.id}"><strong>${esc(t.name)}</strong><span>${esc(t.leave.reason||'장기부재')}${t.leave.end?` · ~${esc(t.leave.end)}`:' · 종료일 없음'}</span></button>`).join('')}</div>`:''}`;
 };
 const __v13SetAllTeacherAttendance=setAllTeacherAttendance;
-setAllTeacherAttendance=function(v){const list=activeTeachers().filter(t=>!v14TeacherOnLeave(t));if(!list.length)return toast('출석 대상 교사가 없습니다.');pushUndo();initializeTeacherAttendance(list);for(const t of list){const a=teacherAtt(t);a.present=!!v;if(!v)a.late=false;writeTeacherAttendance(t.id,a);}save();toast(v?`${list.length}명 교사 전체 출석 선택`:'교사 전체 출석을 해제했습니다.');render();};
+setAllTeacherAttendance=function(v){
+  const list=activeTeachers().filter(t=>!v14TeacherOnLeave(t));if(!list.length)return toast('출석 대상 교사가 없습니다.');pushUndo();
+  if(v){
+    initializeTeacherAttendance(list);
+    for(const t of list){const a=teacherAtt(t);writeTeacherAttendance(t.id,{...a,present:true});}
+  }else{
+    const sess=state.teacherSessions?.[ui.date];
+    if(sess){for(const t of list)delete sess.attendance?.[t.id];cleanupTeacherAttendanceSession(ui.date);}
+  }
+  save();toast(v?`${list.length}명 교사 전체 출석 선택`:'교사 전체 출석을 해제했습니다.');render();
+};
 
 // ---------- settings stronger hierarchy ----------
 const __v13SettingsView=settingsView;
@@ -224,7 +235,7 @@ modalHtml=function(){
   if(ui.modal?.type==='studentFilters'){
     const f=ui.studentFilters;
     const row=(key,label)=>`<label class="filterField"><span>${label}</span><select class="input" data-filter-key="${key}">${v14FilterOptions(key).map(v=>`<option ${f[key]===v?'selected':''}>${esc(v)}</option>`).join('')}</select></label>`;
-    return modal(`<div class="modalTitleRow"><div><div class="titleSmall">학생 필터</div><div class="muted">여러 조건을 동시에 골라 필요한 학생만 봅니다.</div></div>${close}</div><div class="filterGrid">${row('grade','학년')}${row('teacher','담당교사')}${row('parentFaith','부모 신앙')}${row('multicultural','다문화')}${row('tag','기타 분류')}${row('team','팀')}${row('gender','성별')}${row('longAbsent','출석 상태')}</div><div class="notice">이 분류는 내부 관리용입니다. 출석·달란트 공유에는 포함되지 않습니다.</div><div class="grid2"><button class="secondary" data-act="clearStudentFilters">전체 해제</button><button class="primary" data-act="applyStudentFilters">필터 적용</button></div>`);
+    return modal(`<div class="modalTitleRow"><div><div class="titleSmall">학생 필터</div><div class="muted">학년·팀은 화면의 ‘보기’에서 선택하고, 여기서는 추가 조건만 고릅니다.</div></div>${close}</div><div class="filterGrid">${row('teacher','담당교사')}${row('parentFaith','부모 신앙')}${row('multicultural','다문화')}${row('tag','기타 분류')}${row('gender','성별')}${row('longAbsent','출석 상태')}</div><div class="notice">학년·팀 선택과 중복되지 않습니다. 이 분류는 내부 관리용이며 출석·달란트 공유에는 포함되지 않습니다.</div><div class="grid2"><button class="secondary" data-act="clearStudentFilters">전체 해제</button><button class="primary" data-act="applyStudentFilters">필터 적용</button></div>`);
   }
   if(ui.modal?.type==='dashboard'){
     return modal(`<div class="modalTitleRow"><div><div class="titleSmall">부서 현황</div><div class="muted">월별 흐름과 학년별 상태를 한 화면에서 확인합니다.</div></div>${close}</div><div class="chips">${scopeOptionsWithManaged().map(v=>`<button class="chip ${ui.analyticsScope===v?'active':''}" data-analytics-scope="${attr(v)}">${esc(v)}</button>`).join('')}</div>${v14DashboardHtml()}`);

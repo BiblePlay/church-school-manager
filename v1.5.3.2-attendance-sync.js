@@ -111,7 +111,7 @@
   function saveTeacherAttendanceEdit(){
     const d=ui.teacherAttendanceEditDraft;if(!d)return;
     document.querySelectorAll('[data-edit-teacher-reason]').forEach(el=>{const id=el.dataset.editTeacherReason,a=d.attendance[id]||draftTeacher(id);d.attendance[id]={...a,reason:el.value||''};});
-    const real=Object.values(d.attendance||{}).some(a=>!!a&&(!!a.present||!!a.late));
+    const real=Object.values(d.attendance||{}).some(a=>!!a&&(!!a.present||!!a.late||!!String(a.reason||'').trim()));
     pushUndo();
     if(real){state.teacherSessions[d.date]={attendance:clone(d.attendance)};}
     else delete state.teacherSessions[d.date];
@@ -142,11 +142,11 @@
     for(const sess of b.teacherSessions||[])for(const r of sess.records||[]){teacherRows++;const inc=tm.get(r.teacherId)||{id:r.teacherId,name:r.teacherName||'',role:r.role||''};if(!resolveBundleTeacher(inc))unknownTeachers.add(inc.name||r.teacherId);}
     return {studentSessions:(b.studentSessions||[]).length,teacherSessions:(b.teacherSessions||[]).length,studentRows,teacherRows,unknownStudents:[...unknownStudents],unknownTeachers:[...unknownTeachers]};
   }
-  function applyAttendanceBundle(b,{silent=false}={}){
+  function applyAttendanceBundle(b,{silent=false,skipSnapshot=false}={}){
     if(!b||b.schema!=='church-school-attendance-bundle-v1')throw new Error('지원하지 않는 출석 기록 파일입니다.');
     const sm=new Map((b.students||[]).map(x=>[x.id,x])),tm=new Map((b.teachers||[]).map(x=>[x.id,x]));
     let studentN=0,teacherN=0,skipped=0;
-    createSnapshot('출석 기록 일괄 업데이트 전');pushUndo();
+    if(!skipSnapshot){createSnapshot('출석 기록 일괄 업데이트 전');pushUndo();}
     for(const sess of b.studentSessions||[]){
       if(!sess?.date)continue;state.sessions[sess.date] ||= {attendance:{},transactions:[]};state.sessions[sess.date].attendance ||= {};
       for(const r of sess.records||[]){const inc=sm.get(r.studentId)||{id:r.studentId,name:r.studentName||'',grade:r.grade||''},st=resolveBundleStudent(inc);if(!st){skipped++;continue;}state.sessions[sess.date].attendance[st.id]={present:!!r.present,late:!!r.late,newcomer:!!r.newcomer,status:r.present?'present':'absent',memo:r.memo||''};studentN++;}
@@ -155,11 +155,17 @@
       if(!sess?.date)continue;state.teacherSessions[sess.date] ||= {attendance:{}};state.teacherSessions[sess.date].attendance ||= {};
       for(const r of sess.records||[]){const inc=tm.get(r.teacherId)||{id:r.teacherId,name:r.teacherName||'',role:r.role||''},t=resolveBundleTeacher(inc);if(!t){skipped++;continue;}state.teacherSessions[sess.date].attendance[t.id]={present:!!r.present,late:!!r.late,status:r.present?'present':'absent',reason:r.reason||''};teacherN++;}
     }
+    // 외부 파일에도 '전원 미체크' 날짜가 들어올 수 있으므로, 가져온 뒤에도
+    // 앱의 동일한 실기록 기준을 적용한다. 달란트 거래가 있는 학생 날짜는 거래만 보존한다.
+    for(const sess of b.studentSessions||[])if(sess?.date)cleanupStudentAttendanceSession(sess.date);
+    for(const sess of b.teacherSessions||[])if(sess?.date)cleanupTeacherAttendanceSession(sess.date);
     state.importedAttendanceBundleIds ||= [];
     if(b.bundleId&&!state.importedAttendanceBundleIds.includes(b.bundleId))state.importedAttendanceBundleIds.push(b.bundleId);
     save();if(!silent){ui.modal=null;toast(`출석 업데이트 완료 · 학생 ${studentN} · 교사 ${teacherN}${skipped?` · 확인 필요 ${skipped}`:''}`);render();}
     return {studentN,teacherN,skipped};
   }
+  window.applyAttendanceBundle=applyAttendanceBundle;
+  window.analyzeAttendanceBundle=analyzeAttendanceBundle;
   function chooseAttendanceBundleFile(){
     const input=document.createElement('input');input.type='file';input.accept='application/json,.json';input.style.display='none';document.body.appendChild(input);
     input.onchange=async()=>{const f=input.files?.[0];input.remove();if(!f)return;try{const b=JSON.parse(await f.text());if(b.schema!=='church-school-attendance-bundle-v1')throw new Error('출석 기록 내보내기 파일이 아닙니다.');ui.attendanceBundlePreview={bundle:b,summary:analyzeAttendanceBundle(b)};ui.modal={type:'attendanceBundlePreview'};render();}catch(e){alert(`출석 기록 가져오기에 실패했습니다.\n${e.message||e}`);}};
@@ -180,15 +186,9 @@
 
   const priorBaseImport_v1532=importBaseDataFile;
   importBaseDataFile=async function(file){
-    let parsed=null;try{parsed=JSON.parse(await file.text());}catch(e){return priorBaseImport_v1532(file);}
-    if(parsed?.schema!=='church-school-base-v3'||parsed?.attendanceSync?.schema!=='church-school-attendance-bundle-v1')return priorBaseImport_v1532(file);
-    const realConfirm=window.confirm;let baseDecision=null;
-    window.confirm=function(msg){if(baseDecision===null&&/데이터팩/.test(String(msg))&&/업데이트할까요/.test(String(msg))){baseDecision=realConfirm(msg);return baseDecision;}return realConfirm(msg);};
-    try{await priorBaseImport_v1532(file);}finally{window.confirm=realConfirm;}
-    if(baseDecision===false)return;
-    if(baseDecision===true&&realConfirm('이 데이터팩에는 출석 기록도 포함되어 있습니다.\n기존 출석을 지우지 않고 같은 날짜의 기록만 업데이트할까요?')){
-      const r=applyAttendanceBundle(parsed.attendanceSync,{silent:true});toast(`데이터팩 + 출석 업데이트 완료 · 학생 ${r.studentN} · 교사 ${r.teacherN}${r.skipped?` · 확인 필요 ${r.skipped}`:''}`);render();
-    }
+    // v3 데이터팩의 출석 포함 여부까지 v1.5.1-data-sync의 미리보기에서 함께 처리한다.
+    // 여기서 confirm을 가로채지 않아 업데이트/명단 교체 선택 흐름이 한 곳에서만 동작한다.
+    return priorBaseImport_v1532(file);
   };
 
   // ---------- teacher Kakao paste ----------
@@ -250,12 +250,12 @@
       return modal(`<div class="modalTitleRow"><div><div class="titleSmall">교사 출석 기록</div><div class="muted">날짜를 누르면 그날 기록만 확인·수정합니다.</div></div>${close}</div><div class="chips">${tabs.map(v=>`<button class="chip ${ui.teacherHistoryRange===v?'active':''}" data-teacher-history-range="${v}">${v}</button>`).join('')}</div><div class="card">${dates.map(k=>{const c=teacherSummary(k);return `<div class="history historyManage"><span><strong>${esc(displayDate(k))}</strong><small>출석 ${c.present}/${c.total} · 결석 ${c.absent}${c.late?` · 지각 ${c.late}`:''}</small></span><button class="secondary nowrap" data-edit-teacher-session="${k}">보기 · 수정</button></div>`;}).join('')||'<div class="muted">선택한 기간의 교사 출석 기록이 없습니다.</div>'}</div>`);
     }
     if(ui.modal?.type==='studentAttendanceEdit'){
-      const d=ui.attendanceEditDraft;if(!d)return '';const ids=Object.keys(d.attendance||{}),list=state.students.filter(s=>ids.includes(s.id));
-      return modal(`<div class="modalTitleRow"><div><div class="titleSmall">학생 출석 수정</div><div class="muted">${esc(displayDate(d.date))} · 이 날짜의 기록만 수정합니다.</div></div>${close}</div><div class="notice">달란트와 학생 기본정보는 변경되지 않습니다.</div><div class="list">${list.map(st=>{const a=draftStudent(st.id),stat=a.present?(a.late?'late':'present'):'absent';return `<div class="attendanceRow"><div class="attendanceTop"><div class="studentIdentity"><span class="studentName">${esc(st.name)}</span><span class="studentMeta">${esc(st.grade||'학년 미지정')}</span></div></div><div class="attendanceFlags"><button class="flagBtn ${stat==='present'?'active':''}" data-edit-student-status="present" data-id="${st.id}">출석</button><button class="flagBtn ${stat==='late'?'active':''}" data-edit-student-status="late" data-id="${st.id}">지각</button><button class="flagBtn ${stat==='absent'?'active':''}" data-edit-student-status="absent" data-id="${st.id}">결석</button><button class="flagBtn ${a.newcomer?'active':''}" data-edit-student-newcomer="${st.id}">새친구</button></div><div class="memoLine"><input class="memo" data-edit-student-memo="${st.id}" value="${attr(a.memo||'')}" placeholder="비고"></div></div>`;}).join('')}</div><button class="primary fullBtn" data-act="saveStudentAttendanceEdit">수정 저장</button>`);
+      const d=ui.attendanceEditDraft;if(!d)return '';const ids=Object.keys(d.attendance||{}),list=state.students.filter(s=>ids.includes(s.id)).sort((a,b)=>String(a.grade||'').localeCompare(String(b.grade||''),'ko')||koName(a,b));
+      return modal(`<div class="modalTitleRow"><div><div class="titleSmall">학생 출석 수정</div><div class="muted">${esc(displayDate(d.date))} · 이 날짜의 기록만 수정합니다.</div></div>${close}</div><div class="notice">달란트와 학생 기본정보는 변경되지 않습니다.</div><div class="list">${list.map(st=>{const a=draftStudent(st.id),stat=a.present?(a.late?'late':'present'):'absent';return `<div class="attendanceRow"><div class="attendanceTop noPhoto editAttendanceTop"><div class="studentIdentity"><span class="studentName">${esc(st.name)}</span><span class="studentMeta">${esc(st.grade||'학년 미지정')}</span></div></div><div class="attendanceFlags"><button class="flagBtn ${stat==='present'?'active':''}" data-edit-student-status="present" data-id="${st.id}">출석</button><button class="flagBtn ${stat==='late'?'active':''}" data-edit-student-status="late" data-id="${st.id}">지각</button><button class="flagBtn ${stat==='absent'?'active':''}" data-edit-student-status="absent" data-id="${st.id}">결석</button><button class="flagBtn ${a.newcomer?'active':''}" data-edit-student-newcomer="${st.id}">새친구</button></div><div class="memoLine"><input class="memo" data-edit-student-memo="${st.id}" value="${attr(a.memo||'')}" placeholder="비고"></div></div>`;}).join('')}</div><button class="primary fullBtn" data-act="saveStudentAttendanceEdit">수정 저장</button>`);
     }
     if(ui.modal?.type==='teacherAttendanceEdit'){
-      const d=ui.teacherAttendanceEditDraft;if(!d)return '';const ids=Object.keys(d.attendance||{}),list=state.teachers.filter(t=>ids.includes(t.id));
-      return modal(`<div class="modalTitleRow"><div><div class="titleSmall">교사 출석 수정</div><div class="muted">${esc(displayDate(d.date))} · 이 날짜의 기록만 수정합니다.</div></div>${close}</div><div class="list">${list.map(t=>{const a=draftTeacher(t.id),stat=a.present?(a.late?'late':'present'):'absent';return `<div class="attendanceRow"><div class="attendanceTop"><div class="studentIdentity"><span class="studentName">${esc(t.name)}</span><span class="studentMeta">${esc(t.role||'담당 미지정')}</span></div></div><div class="attendanceFlags"><button class="flagBtn ${stat==='present'?'active':''}" data-edit-teacher-status="present" data-id="${t.id}">출석</button><button class="flagBtn ${stat==='late'?'active':''}" data-edit-teacher-status="late" data-id="${t.id}">지각</button><button class="flagBtn ${stat==='absent'?'active':''}" data-edit-teacher-status="absent" data-id="${t.id}">결석</button></div><div class="memoLine"><input class="memo" data-edit-teacher-reason="${t.id}" value="${attr(a.reason||'')}" placeholder="비고 · 사유"></div></div>`;}).join('')||'<div class="empty">표시할 교사가 없습니다.</div>'}</div><button class="primary fullBtn" data-act="saveTeacherAttendanceEdit">수정 저장</button>`);
+      const d=ui.teacherAttendanceEditDraft;if(!d)return '';const ids=Object.keys(d.attendance||{}),list=state.teachers.filter(t=>ids.includes(t.id)).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko'));
+      return modal(`<div class="modalTitleRow"><div><div class="titleSmall">교사 출석 수정</div><div class="muted">${esc(displayDate(d.date))} · 이 날짜의 기록만 수정합니다.</div></div>${close}</div><div class="list">${list.map(t=>{const a=draftTeacher(t.id),stat=a.present?(a.late?'late':'present'):'absent';return `<div class="attendanceRow"><div class="attendanceTop noPhoto editAttendanceTop"><div class="studentIdentity"><span class="studentName">${esc(t.name)}</span><span class="studentMeta">${esc(t.role||'담당 미지정')}</span></div></div><div class="attendanceFlags"><button class="flagBtn ${stat==='present'?'active':''}" data-edit-teacher-status="present" data-id="${t.id}">출석</button><button class="flagBtn ${stat==='late'?'active':''}" data-edit-teacher-status="late" data-id="${t.id}">지각</button><button class="flagBtn ${stat==='absent'?'active':''}" data-edit-teacher-status="absent" data-id="${t.id}">결석</button></div><div class="memoLine"><input class="memo" data-edit-teacher-reason="${t.id}" value="${attr(a.reason||'')}" placeholder="비고 · 사유"></div></div>`;}).join('')||'<div class="empty">표시할 교사가 없습니다.</div>'}</div><button class="primary fullBtn" data-act="saveTeacherAttendanceEdit">수정 저장</button>`);
     }
     if(ui.modal?.type==='attendanceBundlePreview'){
       const s=ui.attendanceBundlePreview?.summary||{};const unknown=[...(s.unknownStudents||[]),...(s.unknownTeachers||[])];

@@ -1,4 +1,4 @@
-const CACHE='church-school-v1.5.3.19-final-stable';
+const CACHE='church-school-v1.5.3.20-final-complete';
 const CORE=['./','./index.html','./styles.css','./app.js','./v1.4-patch.js','./v1.4.2-recovery.js','./v1.4.2.2-hotfix.js','./v1.4.2.3-ui.js','./v1.4.2.5-people.js','./v1.4.2.6-focus.js','./v1.5.0-final.js','./v1.5.1-data-sync.js','./v1.5.1.1-contact-fix.js','./v1.5.1.2-excel-sheet-fix.js','./v1.5.1.3-excel-merge-fix.js','./v1.5.1.4-contact-data.js','./v1.5.1.6-attendance-session-fix.js','./v1.5.1.7-attendance-recorded-fix.js','./v1.5.1.8-student-attendance-history.js','./v1.5.1.12-birthdate-import-fix.js','./v1.5.2.1-student-detail.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png','./icons/favicon-32.png',
   './v1.5.3.0-teacher-bulk-manage.js','./v1.5.3.1-teacher-birthdays.js','./v1.5.3.2-attendance-sync.js','./v1.5.3.5-attendance-final.js','./v1.5.3.9-attendance-rate-sort-safe.js','./v1.5.3.11-default-grade-sync.js','./v1.5.3.12-grade-settings-clean.js'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)));});

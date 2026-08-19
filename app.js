@@ -1,4 +1,4 @@
-const APP_VERSION = '1.5.3.19';
+const APP_VERSION = '1.5.3.20';
 const STORAGE_KEY = 'church-school-mobile-v4'; // v0.4 데이터 그대로 이어서 사용
 
 const sampleStudents = [];
@@ -17,14 +17,15 @@ const defaultState = {
     department:'초등부',
     managementScope:'전체',
     teacherAttendanceEnabled:false,
-    attendanceSort:'attendance',
+    attendanceSort:'name',
     talentSort:'name',
     studentSort:'name',
     longAbsenceDays:60,
     customStudentOrder:[],
     managedGrades:[],
     managedTeams:[],
-    adminMode:true
+    adminMode:true,
+    profileAccess:'care'
   },
   importedPacketIds:[],
   snapshots:[]
@@ -70,14 +71,15 @@ function migrate(x){
   s.importedPacketIds = Array.isArray(x?.importedPacketIds) ? x.importedPacketIds : [];
   s.snapshots = Array.isArray(x?.snapshots) ? x.snapshots : [];
   s.version = 8;
-  s.settings.attendanceSort ||= 'attendance';
+  s.settings.attendanceSort = ['name','grade'].includes(s.settings.attendanceSort)?s.settings.attendanceSort:'name';
   s.settings.talentSort ||= 'name';
-  s.settings.studentSort ||= 'name';
+  s.settings.studentSort = ['name','grade'].includes(s.settings.studentSort)?s.settings.studentSort:'name';
   s.settings.longAbsenceDays = Number(s.settings.longAbsenceDays||60);
   s.settings.customStudentOrder = Array.isArray(s.settings.customStudentOrder)?s.settings.customStudentOrder:[];
   s.settings.managedGrades = Array.isArray(s.settings.managedGrades)?s.settings.managedGrades:[];
   s.settings.managedTeams = Array.isArray(s.settings.managedTeams)?s.settings.managedTeams:[];
   if(typeof s.settings.adminMode!=='boolean') s.settings.adminMode=true;
+  if(!['care','youth'].includes(s.settings.profileAccess))s.settings.profileAccess='care';
   s.students.forEach(st=>{ st.teams=Array.isArray(st.teams)?st.teams:[]; st.grade=st.grade||''; st.parentRelation=st.parentRelation||''; st.parent2Name=st.parent2Name||''; st.parent2Relation=st.parent2Relation||''; st.parent2Phone=st.parent2Phone||''; st.longTermManual=!!st.longTermManual; if(st.active===undefined)st.active=true; });
   s.teachers.forEach(t=>{ t.birthday=t.birthday||''; t.emergencyPhone=t.emergencyPhone||''; if(t.active===undefined)t.active=true; });
   return s;
@@ -224,8 +226,13 @@ function longAbsenceInfo(st){
 function customRank(st){ const a=state.settings.customStudentOrder||[]; const i=a.indexOf(st.id); return i<0?999999:i; }
 function sortStudents(arr,mode){
   const out=[...arr];
-  if(mode==='name') return out.sort(koName);
-  if(mode==='grade') return out.sort((a,b)=>String(a.grade||'').localeCompare(String(b.grade||''),'ko')||koName(a,b));
+  const longLast=(cmp)=>(a,b)=>{
+    const A=longAbsenceInfo(a),B=longAbsenceInfo(b);
+    if(A.long!==B.long)return A.long?1:-1;
+    return cmp(a,b);
+  };
+  if(mode==='name') return out.sort(longLast(koName));
+  if(mode==='grade') return out.sort(longLast((a,b)=>String(a.grade||'').localeCompare(String(b.grade||''),'ko')||koName(a,b)));
   if(mode==='custom') return out.sort((a,b)=>customRank(a)-customRank(b)||koName(a,b));
   if(mode==='attendance') return out.sort((a,b)=>{
     const A=longAbsenceInfo(a),B=longAbsenceInfo(b);
@@ -313,9 +320,14 @@ function talentView(){
 
 function attendanceScopeList(){
   const list=scopeStudents(ui.attendanceGrade);
+  const mode=state.settings.attendanceSort==='grade'?'grade':'name';
   return [...list].sort((a,b)=>{
     const A=longAbsenceInfo(a), B=longAbsenceInfo(b);
     if(A.long!==B.long) return A.long?1:-1;
+    if(mode==='grade'){
+      const g=String(a.grade||'').localeCompare(String(b.grade||''),'ko');
+      if(g)return g;
+    }
     return koName(a,b);
   });
 }
@@ -326,16 +338,18 @@ function attendanceGradeSummary(){
 }
 function attendanceView(){
   if(state.settings.teacherAttendanceEnabled && ui.attendanceMode==='teacher') return teacherAttendanceView();
-  const list=attendanceScopeList(); const c=attendanceCounts(list); const present=c.present;
+  const list=attendanceScopeList();
   const long=list.filter(s=>longAbsenceInfo(s).long), regular=list.filter(s=>!longAbsenceInfo(s).long);
+  // 장기 미출석 관리 대상은 목록에는 남기되 일반 출석 분모에서는 제외한다.
+  const c=attendanceCounts(regular); const present=c.present;
   const listHtml=long.length
     ? `${regular.map(st=>attendanceRow(st,false)).join('')}<div class="listSection"><strong>장기 미출석 · 관리</strong><small>${long.length}명 · 기본 2개월, 설정에서 변경 가능</small></div>${long.map(st=>attendanceRow(st,true)).join('')}`
     : regular.map(st=>attendanceRow(st,false)).join('');
   return `${dateControl()}
     ${state.settings.teacherAttendanceEnabled?`<div class="seg"><button class="segBtn active" data-attmode="student">학생</button><button class="segBtn" data-attmode="teacher">교사</button></div>`:''}
-    <div class="attendanceSummary attendanceSummaryStrong"><div class="attendanceSummaryMain"><div><div class="label lightLabel">${esc(scopeLabel(ui.attendanceGrade))} 출석</div><div class="attendanceBig"><strong>${present}</strong><span>/ ${list.length}명</span></div><div class="summarySub">결석 ${c.absent} · 지각 ${c.late} · 새친구 ${c.new}</div></div><button class="shareAction" data-act="shareCurrentAttendance">공유</button></div><div class="attendanceBulk"><button class="primary" data-act="attendanceSelectAll">전체 선택</button><button class="secondary darkSecondary" data-act="attendanceClearAll">전체 해제</button></div></div>
+    <div class="attendanceSummary attendanceSummaryStrong"><div class="attendanceSummaryMain"><div><div class="label lightLabel">${esc(scopeLabel(ui.attendanceGrade))} 출석</div><div class="attendanceBig"><strong>${present}</strong><span>/ ${regular.length}명</span></div><div class="summarySub">결석 ${c.absent} · 지각 ${c.late} · 새친구 ${c.new}${long.length?` · 장기 미출석 ${long.length} 별도`:``}</div></div><button class="shareAction" data-act="shareCurrentAttendance">공유</button></div><div class="attendanceBulk"><button class="primary" data-act="attendanceSelectAll">전체 선택</button><button class="secondary darkSecondary" data-act="attendanceClearAll">전체 해제</button></div></div>
     ${scopeChoiceHtml('attendance',ui.attendanceGrade,true)}
-    <div class="sortBar"><span>정렬</span><button class="sortBtn active" disabled>가나다</button></div>
+    <div class="sortBar"><span>정렬</span>${[['name','가나다'],['grade','학년']].map(([v,l])=>`<button class="sortBtn ${state.settings.attendanceSort===v?'active':''}" data-att-sort="${v}">${l}</button>`).join('')}</div>
     <div class="list">${listHtml||'<div class="empty">학생이 없습니다.</div>'}</div>`;
 }
 function attendanceRow(st,isLong=false){
@@ -395,7 +409,7 @@ function studentsView(){
   list=sortStudents(list,state.settings.studentSort||'name');
   return `<div class="card"><div class="row"><div><div class="label">학생 명부</div><div class="muted">이름을 누르면 연락처·주소·출석·달란트 이력을 봅니다.</div></div><div class="headActions"><button class="secondary nowrap" data-act="manageStudentList">명단 정리</button><button class="primary nowrap" data-act="addStudent">학생 추가</button></div></div></div>
     ${scopeChoiceHtml('students',ui.studentGrade,true)}
-    <div class="sortBar"><span>정렬</span>${[['name','가나다'],['grade','학년'],['custom','사용자']].map(([v,l])=>`<button class="sortBtn ${state.settings.studentSort===v?'active':''}" data-stu-sort="${v}">${l}</button>`).join('')}</div>
+    <div class="sortBar"><span>정렬</span>${[['name','가나다'],['grade','학년']].map(([v,l])=>`<button class="sortBtn ${state.settings.studentSort===v?'active':''}" data-stu-sort="${v}">${l}</button>`).join('')}</div>
     <div class="list">${list.map(st=>`<button class="studentRow ${st.photo?'hasPhoto':'noPhoto'}" data-detail="${st.id}">${avatarCell(st)}<span><span class="studentName">${esc(st.name)}</span><span class="studentMeta">${esc(st.grade||'학년 미지정')}${st.gender?' · '+esc(st.gender):''}${(st.teams||[]).length?' · '+esc(st.teams.join(', ')):''}</span></span><span class="amount">${fmt(totalAmt(st.id))}<small>누적</small></span></button>`).join('')||'<div class="empty">학생이 없습니다.</div>'}</div>
     <div class="divider"></div>
     <div class="card birthdayAccess"><div class="row"><div><div class="label">월별 생일자</div><div class="muted">학생 생일 정보에서 자동으로 월별 명단을 만듭니다.</div></div><button class="secondary nowrap" data-act="birthdayList">생일자 보기</button></div></div>
@@ -541,8 +555,8 @@ function bind(){
   document.querySelectorAll('[data-selectstudent]').forEach(b=>b.onclick=()=>{const id=b.dataset.selectstudent;ui.selected.has(id)?ui.selected.delete(id):ui.selected.add(id);render();});
   document.querySelectorAll('[data-money]').forEach(b=>b.onclick=()=>addTalent(Number(b.dataset.money)));
   document.querySelectorAll('[data-sign]').forEach(b=>b.onclick=()=>{ui.sign=Number(b.dataset.sign);render();});
-  document.querySelectorAll('[data-att-sort]').forEach(b=>b.onclick=()=>{state.settings.attendanceSort=b.dataset.attSort;save();render();});
-  document.querySelectorAll('[data-stu-sort]').forEach(b=>b.onclick=()=>{state.settings.studentSort=b.dataset.stuSort;save();render();});
+  document.querySelectorAll('[data-att-sort]').forEach(b=>b.onclick=()=>{state.settings.attendanceSort=b.dataset.attSort==='grade'?'grade':'name';save();render();});
+  document.querySelectorAll('[data-stu-sort]').forEach(b=>b.onclick=()=>{state.settings.studentSort=b.dataset.stuSort==='grade'?'grade':'name';save();render();});
   document.querySelectorAll('[data-order-grade]').forEach(b=>b.onclick=()=>{ui.orderGrade=b.dataset.orderGrade;render();});
   document.querySelectorAll('[data-order-up]').forEach(b=>b.onclick=()=>moveStudentOrder(b.dataset.orderUp,-1));
   document.querySelectorAll('[data-order-down]').forEach(b=>b.onclick=()=>moveStudentOrder(b.dataset.orderDown,1));
@@ -654,7 +668,7 @@ function setStudentStatus(id,status){if(status==='present')return toggleStudentA
 
 function writeStudentAttendance(id,a,k=ui.date){const sess=ensureSession(k);sess.attendance[id]={present:!!a.present,late:!!a.late,newcomer:!!a.newcomer,status:a.present?'present':'absent',memo:a.memo||''};}
 function studentEntryMeaningful(a){return !!a && (!!a.present || !!a.late || !!a.newcomer);}
-function teacherEntryMeaningful(a){return !!a && (!!a.present || !!a.late);}
+function teacherEntryMeaningful(a){return !!a && (!!a.present || !!a.late || !!String(a.reason||'').trim());}
 function cleanupStudentAttendanceSession(k=ui.date){
   const sess=state.sessions?.[k];if(!sess)return;
   const meaningful=Object.values(sess.attendance||{}).some(studentEntryMeaningful);
@@ -668,7 +682,7 @@ function cleanupTeacherAttendanceSession(k=ui.date){
   const meaningful=Object.values(sess.attendance||{}).some(teacherEntryMeaningful);
   if(!meaningful)delete state.teacherSessions[k];
 }
-function initializeAttendanceScope(list){const sess=ensureSession();for(const st of list){if(!Object.prototype.hasOwnProperty.call(sess.attendance,st.id))writeStudentAttendance(st.id,{present:false,late:false,newcomer:false,memo:''});}}
+function initializeAttendanceScope(list){const sess=ensureSession();for(const st of list){if(longAbsenceInfo(st).long)continue;if(!Object.prototype.hasOwnProperty.call(sess.attendance,st.id))writeStudentAttendance(st.id,{present:false,late:false,newcomer:false,memo:''});}}
 function toggleStudentAttendance(id){
   const st=studentById(id);if(!st)return;pushUndo();
   const current=att(st);
@@ -690,18 +704,24 @@ function toggleStudentAttendanceFlag(id,flag){
   save();render();
 }
 function setAllStudentAttendance(v){
-  const list=attendanceScopeList();if(!list.length)return toast('학생이 없습니다.');pushUndo();
+  const list=attendanceScopeList();if(!list.length)return toast('학생이 없습니다.');
   if(v){
-    initializeAttendanceScope(list);
-    for(const st of list){const a=att(st);writeStudentAttendance(st.id,{...a,present:true});}
-  }else{
-    const sess=state.sessions?.[ui.date];
-    if(sess){
-      for(const st of list)delete sess.attendance?.[st.id];
-      cleanupStudentAttendanceSession();
-    }
+    // 장기 미출석 기간은 일반 출석률 분모에서 제외한다.
+    // 따라서 '전체 선택'은 장기 미출석 관리 대상까지 자동 출석 처리하지 않는다.
+    const targets=list.filter(st=>!longAbsenceInfo(st).long);
+    if(!targets.length)return toast('현재 범위에 일반 출석 대상 학생이 없습니다.');
+    pushUndo();initializeAttendanceScope(targets);
+    for(const st of targets){const a=att(st);writeStudentAttendance(st.id,{...a,present:true});}
+    save();toast(`${targets.length}명 전체 출석 선택${targets.length<list.length?` · 장기 미출석 ${list.length-targets.length}명 제외`:''}`);render();
+    return;
   }
-  save();toast(v?`${list.length}명 전체 출석 선택`:'현재 목록의 출석 체크를 해제했습니다.');render();
+  pushUndo();
+  const sess=state.sessions?.[ui.date];
+  if(sess){
+    for(const st of list)delete sess.attendance?.[st.id];
+    cleanupStudentAttendanceSession();
+  }
+  save();toast('현재 목록의 출석 체크를 해제했습니다.');render();
 }
 function writeTeacherAttendance(id,a,k=ui.date){const sess=ensureTeacherSession(k);sess.attendance[id]={present:!!a.present,late:!!a.late,status:a.present?'present':'absent',reason:a.reason||''};}
 function initializeTeacherAttendance(list){const sess=ensureTeacherSession();for(const t of list){if(!Object.prototype.hasOwnProperty.call(sess.attendance,t.id))writeTeacherAttendance(t.id,{present:false,late:false,reason:''});}}
@@ -755,9 +775,14 @@ function confirmTeacherAttendanceDraft(){
 }
 function setTeacherStatus(id,status){if(status==='present')return toggleTeacherAttendance(id);if(status==='late')return toggleTeacherAttendanceFlag(id,'late');}
 function saveTeacherReasonAuto(id,el){
-  const t=teacherById(id);if(!t||!el)return;const sess=state.teacherSessions?.[ui.date];
-  if(!sess?.attendance?.[id]){if(String(el.value||'').trim())toast('먼저 출석을 체크한 뒤 비고를 입력해 주세요.');return;}
-  const next=el.value,prev=teacherAtt(t).reason||'';if(prev===next)return;const a=teacherAtt(t);writeTeacherAttendance(id,{...a,reason:next});save();const m=document.querySelector(`[data-teacher-saved="${CSS.escape(id)}"]`);if(m){m.textContent='저장됨';setTimeout(()=>{if(m)m.textContent='';},800);}
+  const t=teacherById(id);if(!t||!el)return;
+  const next=el.value||'',prev=teacherAtt(t).reason||'';if(prev===next)return;
+  const exists=!!state.teacherSessions?.[ui.date]?.attendance?.[id];
+  if(!exists&&!String(next).trim())return;
+  pushUndo();
+  const a=teacherAtt(t);writeTeacherAttendance(id,{...a,reason:next});
+  if(!String(next).trim()&&!a.present&&!a.late)cleanupTeacherAttendanceSession(ui.date);
+  save();const m=document.querySelector(`[data-teacher-saved="${CSS.escape(id)}"]`);if(m){m.textContent='저장됨';setTimeout(()=>{if(m)m.textContent='';},800);}
 }
 
 function bulkDeactivate(){
@@ -857,8 +882,9 @@ async function shareTeacherList(){
 }
 async function nativeShare({title,text,files}){ try{ if(files && navigator.canShare && navigator.canShare({files}) && navigator.share){await navigator.share({title,text,files});return true;} if(navigator.share){await navigator.share({title,text});return true;} if(navigator.clipboard){await navigator.clipboard.writeText(text);toast('내용을 복사했습니다.');return true;} }catch(e){} return false; }
 async function shareCurrentAttendance(){
-  const list=attendanceScopeList();
-  const section=(group,label)=>{const present=group.filter(st=>att(st).present), absent=group.filter(st=>!att(st).present), notes=[];group.forEach(st=>{const a=att(st);const bits=[];if(a.late)bits.push('지각');if(a.newcomer)bits.push('새친구');if(a.memo)bits.push(a.memo);if(bits.length)notes.push(`${st.name} — ${bits.join(' · ')}`);});return [label,`오늘 출석 ${present.length} / 전체 ${group.length}명`,'','출석',present.map(s=>s.name).join(', ')||'없음','','결석',absent.map(s=>s.name).join(', ')||'없음',...(notes.length?['','비고',...notes]:[])];};
+  // 장기 미출석 학생은 일반 출석 분모·결석 공유에서 제외하고 앱 안의 관리 목록에는 계속 남긴다.
+  const list=attendanceScopeList().filter(st=>!longAbsenceInfo(st).long);
+  const section=(group,label)=>{const present=group.filter(st=>att(st).present), absent=group.filter(st=>att(st).status==='absent'), notes=[];group.forEach(st=>{const a=att(st);const bits=[];if(a.late)bits.push('지각');if(a.newcomer)bits.push('새친구');if(a.memo)bits.push(a.memo);if(bits.length)notes.push(`${st.name} — ${bits.join(' · ')}`);});return [label,`오늘 출석 ${present.length} / 전체 ${group.length}명`,'','출석',present.map(s=>s.name).join(', ')||'없음','','결석',absent.map(s=>s.name).join(', ')||'없음',...(notes.length?['','비고',...notes]:[])];};
   let lines=[];
   if(ui.attendanceGrade==='전체'){lines=[`${displayDate()} · 전체 출석`,''];for(const g of grades()){const group=list.filter(s=>s.grade===g);if(group.length)lines.push(...section(group,g),'');}}
   else lines=[`${displayDate()} · ${ui.attendanceGrade} 출석`,'',...section(list,'').slice(1)];
@@ -880,11 +906,11 @@ function deleteSessionRecord(k){
   if(!confirm(`${displayDate(k)}의 출석 기록을 삭제할까요?\n달란트 기록과 학생 기본정보는 유지되며 되돌리기로 복구할 수 있습니다.`))return;
   pushUndo(); state.sessions[k].attendance={};delete state.sessions[k].attendanceStarted;if(!(state.sessions[k].transactions||[]).length)delete state.sessions[k]; save(); toast('출석 기록을 삭제했습니다.'); render();
 }
-async function shareSummary(){ const list=scopedStudents(ui.attendanceGrade==='전체'?(state.settings.managementScope||'전체'):ui.attendanceGrade); const c=attendanceCounts(list); const lines=[`${displayDate()} · ${state.settings.department||'교회학교'}`,`출석 ${c.present}/${list.length} · 결석 ${c.absent} · 지각 ${c.late}`,`달란트 총 ${fmt(sessionTotal())}`]; const gradesList=grades(); gradesList.forEach(g=>{const ss=active().filter(s=>s.grade===g); if(ss.length){const cc=attendanceCounts(ss); const talent=ss.reduce((n,s)=>n+todayAmt(s.id),0); lines.push(`${g} ${cc.present}/${ss.length} · ${fmt(talent)}달란트`);}}); await nativeShare({title:'오늘 요약',text:lines.join('\n')});ui.modal=null;render(); }
+async function shareSummary(){ const list=scopedStudents(ui.attendanceGrade==='전체'?(state.settings.managementScope||'전체'):ui.attendanceGrade).filter(s=>!longAbsenceInfo(s).long); const c=attendanceCounts(list); const lines=[`${displayDate()} · ${state.settings.department||'교회학교'}`,`출석 ${c.present}/${list.length} · 결석 ${c.absent} · 지각 ${c.late}`,`달란트 총 ${fmt(sessionTotal())}`]; const gradesList=grades(); gradesList.forEach(g=>{const ss=active().filter(s=>s.grade===g&&!longAbsenceInfo(s).long); if(ss.length){const cc=attendanceCounts(ss); const talent=ss.reduce((n,s)=>n+todayAmt(s.id),0); lines.push(`${g} ${cc.present}/${ss.length} · ${fmt(talent)}달란트`);}}); await nativeShare({title:'오늘 요약',text:lines.join('\n')});ui.modal=null;render(); }
 async function shareLast(){ const tx=ensureSession().transactions.find(t=>t.id===ui.lastTxId);if(!tx)return;const names=tx.studentIds.map(id=>studentById(id)?.name).filter(Boolean);if(tx.kind==='reset'){const lines=[`${displayDate()} 달란트 리셋`,...names.map(n=>`${n} · 잔액 0으로 리셋`),`총 ${names.length}명`];return nativeShare({title:'달란트 리셋',text:lines.join('\n')});}const lines=[`${displayDate()} 달란트 ${tx.amount<0?'차감':'지급'}`,...names.map(n=>`${n} ${tx.amount>0?'+':''}${tx.amount}`),`${tx.multiplier===2?`기본 ${tx.base} ×2 · `:''}총 ${fmt(tx.amount*names.length)}달란트`];await nativeShare({title:'달란트 기록',text:lines.join('\n')}); }
 function studentPacketInfo(st){return {id:st.id,name:st.name,grade:st.grade||'',birthday:st.birthday||'',gender:st.gender||'',teams:clone(st.teams||[])};}
 async function sharePacket(packet,name,text){ const file=new File([JSON.stringify(packet,null,2)],name,{type:'application/json'}); const shared=await nativeShare({title:name,text,files:[file]}); if(!shared)download(name,JSON.stringify(packet,null,2),'application/json'); }
-async function shareAttendancePacket(){ const list=attendanceScopeList(); const p={schema:'church-school-share-v2',packetId:uid('packet'),type:'attendance',date:ui.date,scope:{kind:'grade',label:ui.attendanceGrade,grades:[...new Set(list.map(s=>s.grade).filter(Boolean))]},createdAt:new Date().toISOString(),students:list.map(studentPacketInfo),records:list.map(s=>({studentId:s.id,present:att(s).present,late:att(s).late,newcomer:att(s).newcomer,status:att(s).present?'present':'absent',memo:att(s).memo||''}))}; await sharePacket(p,`${ui.date}_${ui.attendanceGrade}_출석.json`,`${displayDate()} ${ui.attendanceGrade} 출석 기록`);ui.modal=null;render(); }
+async function shareAttendancePacket(){ const list=attendanceScopeList(),records=state.sessions?.[ui.date]?.attendance||{},recorded=list.filter(s=>Object.prototype.hasOwnProperty.call(records,s.id)); const p={schema:'church-school-share-v2',packetId:uid('packet'),type:'attendance',date:ui.date,scope:{kind:'grade',label:ui.attendanceGrade,grades:[...new Set(recorded.map(s=>s.grade).filter(Boolean))]},createdAt:new Date().toISOString(),students:recorded.map(studentPacketInfo),records:recorded.map(s=>({studentId:s.id,present:att(s).present,late:att(s).late,newcomer:att(s).newcomer,status:att(s).present?'present':'absent',memo:att(s).memo||''}))}; await sharePacket(p,`${ui.date}_${ui.attendanceGrade}_출석.json`,`${displayDate()} ${ui.attendanceGrade} 출석 기록`);ui.modal=null;render(); }
 async function shareTalentPacket(){ const tx=ensureSession().transactions; const visible=filterStudents(); const ids=[...new Set(tx.flatMap(t=>t.studentIds||[]))]; const p={schema:'church-school-share-v2',packetId:uid('packet'),type:'talent',date:ui.date,scope:{kind:ui.filterType,label:ui.filterValue,grades:[...new Set(visible.map(s=>s.grade).filter(Boolean))],teams:[...new Set(visible.flatMap(s=>s.teams||[]))]},createdAt:new Date().toISOString(),students:ids.map(studentById).filter(Boolean).map(studentPacketInfo),records:clone(tx)}; await sharePacket(p,`${ui.date}_달란트.json`,`${displayDate()} 달란트 ${fmt(sessionTotal())}`);ui.modal=null;render(); }
 async function shareTeacherAttendance(){ const list=activeTeachers();const c=teacherAttendanceCounts(list);const text=[`${displayDate()} 교사 출석`,`출석 ${c.present}/${list.length} · 지각 ${c.late} · 결석 ${c.absent}`,...list.filter(t=>teacherAtt(t).status!=='unset').map(t=>`${t.name} ${teacherStatusLabel(teacherAtt(t).status)}${teacherAtt(t).reason?` · ${teacherAtt(t).reason}`:''}`)].join('\n');const p={schema:'church-school-share-v2',packetId:uid('packet'),type:'teacher-attendance',date:ui.date,createdAt:new Date().toISOString(),teachers:list.map(t=>({id:t.id,name:t.name,role:t.role||''})),records:list.map(t=>({teacherId:t.id,present:teacherAtt(t).present,late:teacherAtt(t).late,status:teacherAtt(t).present?'present':'absent',reason:teacherAtt(t).reason||''}))};await sharePacket(p,`${ui.date}_교사출석.json`,text);ui.modal=null;render(); }
 
@@ -899,7 +925,7 @@ function resolveStudent(inc){ return studentById(inc.id)||active().find(s=>norma
 function resolveTeacher(inc){ return teacherById(inc.id)||activeTeachers().find(t=>normalize(t.name)===normalize(inc.name)&&normalize(t.role)===normalize(inc.role)); }
 function stableStudentId(n){return `stu-${normalize(n.grade||'x')}-${normalize(n.name||'x')}-${normalize(n.birthday||'x')}`.slice(0,80);}
 function confirmMerge(){
-  if(!pendingMerge)return;pushUndo();let added=0,attN=0,txN=0,teacherN=0;
+  if(!pendingMerge)return;createSnapshot('공유 파일 병합 전');pushUndo();let added=0,attN=0,txN=0,teacherN=0;
   for(const p of pendingMerge){if(state.importedPacketIds.includes(p.packetId))continue;
     if(p.type==='teacher-attendance'){
       const map={};for(const inc of p.teachers||[]){let t=resolveTeacher(inc);if(!t){t={id:inc.id||uid('tea'),name:inc.name,role:inc.role||'',phone:'',memo:'',active:true};if(teacherById(t.id))t.id=uid('tea');state.teachers.push(t);}map[inc.id]=t.id;}const sess=ensureTeacherSession(p.date);for(const r of p.records||[]){const id=map[r.teacherId]||r.teacherId;if(teacherById(id)){sess.attendance[id]={present:(typeof r.present==='boolean'?r.present:['present','late'].includes(r.status)),late:!!r.late||r.status==='late',status:(typeof r.present==='boolean'?r.present:['present','late'].includes(r.status))?'present':'absent',reason:r.reason||''};teacherN++;}}state.importedPacketIds.push(p.packetId);continue;
@@ -1152,7 +1178,7 @@ function exportWorkbook(kind){
   if(kind==='students'){filename='학생명단';rows=[['이름','학년','성별','생일','학생전화','보호자1','관계1','보호자1연락처','보호자2','관계2','보호자2연락처','학교','형제관계','주소','기타']];active().forEach(s=>rows.push([s.name,s.grade,s.gender,s.birthday,s.phone,s.parentName,s.parentRelation||'',s.parentPhone,s.parent2Name||'',s.parent2Relation||'',s.parent2Phone||'',s.school,s.siblings,s.address,s.memo]));}
   if(kind==='attendance'){filename='출석기록';rows=[['날짜','학생ID','이름','학년','상태','메모']];Object.keys(state.sessions).sort().forEach(k=>Object.entries(state.sessions[k].attendance||{}).forEach(([id,a])=>{const s=studentById(id);if(s)rows.push([k,id,s.name,s.grade,statusLabel(a.status),a.memo||'']);}));}
   if(kind==='talent'){filename='달란트기록';rows=[['날짜','시간','기록ID','학생ID','이름','학년','유형','금액','기본금액','배수','리셋전잔액']];Object.keys(state.sessions).sort().forEach(k=>(state.sessions[k].transactions||[]).forEach(t=>(t.studentIds||[]).forEach(id=>{const s=studentById(id);if(s)rows.push([k,t.time,t.id,id,s.name,s.grade,t.kind==='reset'?'리셋':t.amount<0?'차감':'지급',t.amount,t.base,t.multiplier,t.kind==='reset'?(t.resetFrom?.[id]??''):'']);})));}
-  if(kind==='teachers'){filename='교사명단_출석';rows=[['교사ID','이름','담당','생일','전화번호','비상연락처','비고']];activeTeachers().forEach(t=>rows.push([t.id,t.name,t.role,t.birthday||'',t.phone,t.emergencyPhone||'',t.memo]));rows.push([]);rows.push(['날짜','교사ID','이름','상태','사유']);Object.keys(state.teacherSessions).sort().forEach(k=>Object.entries(state.teacherSessions[k].attendance||{}).forEach(([id,a])=>{const t=teacherById(id);if(t)rows.push([k,id,t.name,teacherStatusLabel(a.status),a.reason||'']);}));}
+  if(kind==='teachers'){filename='교사명단';rows=[['교사ID','이름','담당','생일','전화번호','비상연락처','비고']];activeTeachers().forEach(t=>rows.push([t.id,t.name,t.role,t.birthday||'',t.phone,t.emergencyPhone||'',t.memo]));}
   if(typeof XLSX!=='undefined'){const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,filename.slice(0,31));XLSX.writeFile(wb,`${filename}_${todayKey()}.xlsx`);}else{const csv='\uFEFF'+rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');download(`${filename}_${todayKey()}.csv`,csv,'text/csv;charset=utf-8');}
 }
 
@@ -1161,7 +1187,7 @@ async function setupSW(){if(!('serviceWorker' in navigator)||location.protocol==
 
 document.getElementById('excelImport').addEventListener('change',e=>{const f=e.target.files[0];if(f)handleExcel(f);e.target.value='';});
 document.getElementById('teacherExcelImport').addEventListener('change',e=>{const f=e.target.files[0];if(f)handleTeacherExcel(f);e.target.value='';});
-document.getElementById('backupImport').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const x=migrate(JSON.parse(await f.text()));if(!x.students||!x.sessions)throw new Error('올바른 백업이 아닙니다.');if(confirm('현재 데이터를 이 백업으로 교체할까요?')){state=x;save();location.reload();}}catch(err){alert(err.message);}e.target.value='';});
+document.getElementById('backupImport').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const x=migrate(JSON.parse(await f.text()));if(!x.students||!x.sessions)throw new Error('올바른 백업이 아닙니다.');if(confirm('현재 데이터를 이 백업으로 교체할까요?')){const before={id:uid('snap'),label:'전체 백업 복원 전',createdAt:new Date().toISOString(),data:snapshotPayload()};x.snapshots=[before,...(x.snapshots||[])].slice(0,5);state=x;save();location.reload();}}catch(err){alert(err.message);}e.target.value='';});
 document.getElementById('shareImport').addEventListener('change',e=>{if(e.target.files.length)readShareFiles([...e.target.files]);e.target.value='';});
 document.getElementById('baseDataImport').addEventListener('change',e=>{const f=e.target.files[0];if(f)importBaseDataFile(f);e.target.value='';});
 document.getElementById('photoImport').addEventListener('change',e=>{const f=e.target.files[0];if(!f||!ui.photoStudentId)return;const r=new FileReader();r.onload=()=>{const s=studentById(ui.photoStudentId);if(s){pushUndo();s.photo=r.result;save();ui.modal={type:'detail',id:s.id};render();}};r.readAsDataURL(f);e.target.value='';});
