@@ -55,8 +55,9 @@
       const pos=html.indexOf(marker);
       return pos>=0?html.slice(0,pos)+date+html.slice(pos):date+html;
     }
-    let pos=html.indexOf('<div class="gradeOverview">');
-    if(pos<0)pos=html.indexOf('<div class="chips">');
+    // 학생 출석은 검은 요약 박스 다음, 범위 선택(보기) 바로 앞에 날짜를 둔다.
+    // 현재 화면은 scopeChooser를 사용하므로 예전 gradeOverview/chips 표식을 찾지 않는다.
+    let pos=html.indexOf('<div class="scopeChooser">');
     return pos>=0?html.slice(0,pos)+date+html.slice(pos):date+html;
   }
 

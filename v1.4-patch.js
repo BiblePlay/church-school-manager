@@ -49,7 +49,9 @@ function v14FilterOptions(field){
   return ['전체',...grades()];
 }
 function v14FilteredStudents(){
-  let arr=state.settings.adminMode?active():scopedStudents('내 담당');
+  // 담당 학년은 '기본 시작 범위'일 뿐 접근 제한이 아니다.
+  // 학생 명부의 실제 데이터 원본은 항상 등록된 전체 활성 학생이다.
+  let arr=active();
   const f=ui.studentFilters;
   if(f.grade!=='전체') arr=arr.filter(s=>s.grade===f.grade);
   if(f.teacher!=='전체') arr=arr.filter(s=>(s.assignedTeacher||'')===f.teacher);

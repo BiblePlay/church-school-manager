@@ -245,20 +245,27 @@
     const current=studentById(id);if(current && !wasPresent && att(current).present && current.longTermManual){current.longTermManual=false;save();render();toast('출석 처리되어 장기 미출석이 자동 해제되었습니다.');}
   };
 
-  // ---------- student page: quick grade strip only; rest of existing UI untouched ----------
-  ui.studentQuickGrade=ui.studentQuickGrade||'전체';
+  // ---------- student page: compact scope chooser, same rule as talent/attendance/records ----------
+  // 등록된 전체 학생은 항상 접근 가능하고, 담당 학년은 ui.studentGrade의 기본값으로만 사용한다.
   const oldFilteredStudents=v14FilteredStudents;
-  v14FilteredStudents=function(){const arr=oldFilteredStudents();return ui.studentQuickGrade==='전체'?arr:ui.studentQuickGrade==='미지정'?arr.filter(s=>!s.grade):arr.filter(s=>s.grade===ui.studentQuickGrade);};
+  v14FilteredStudents=function(){
+    let arr=oldFilteredStudents();
+    const scope=ui.studentGrade||'전체';
+    if(scope==='전체')return arr;
+    if(String(scope).startsWith('팀:')){
+      const team=String(scope).slice(2);
+      return arr.filter(s=>(s.teams||[]).includes(team));
+    }
+    return arr.filter(s=>s.grade===scope);
+  };
   const oldStudentsView=studentsView;
   studentsView=function(){
     let html=oldStudentsView();
     if(ui.peopleMode==='teacher')return html;
-    const counts={전체:active().length,'4학년':active().filter(s=>s.grade==='4학년').length,'5학년':active().filter(s=>s.grade==='5학년').length,'6학년':active().filter(s=>s.grade==='6학년').length,미지정:active().filter(s=>!s.grade).length};
-    const strip=`<div class="chips gradeQuickStrip">${['전체','4학년','5학년','6학년','미지정'].map(g=>`<button class="chip ${ui.studentQuickGrade===g?'active':''}" data-student-quick-grade="${g}">${g} ${counts[g]}</button>`).join('')}</div>`;
-    const pos=html.indexOf('<div class="sortBar'); return pos>=0?html.slice(0,pos)+strip+html.slice(pos):strip+html;
+    const chooser=scopeChoiceHtml('students',ui.studentGrade||'전체',true);
+    const pos=html.indexOf('<div class="sortBar');
+    return pos>=0?html.slice(0,pos)+chooser+html.slice(pos):chooser+html;
   };
-  const oldBind=bind;
-  bind=function(){oldBind();document.querySelectorAll('[data-student-quick-grade]').forEach(b=>b.onclick=()=>{ui.studentQuickGrade=b.dataset.studentQuickGrade;render();});};
 
   save();render();
 })();

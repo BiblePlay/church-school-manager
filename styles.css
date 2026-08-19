@@ -449,3 +449,44 @@ html[data-theme="dark"] .noContact{color:var(--muted)!important}
   line-height:1.15!important;
   letter-spacing:-0.2px;
 }
+
+
+/* v1.5.3.19 — compact "보기" scope selector + collapsible attendance history */
+.scopeChooser{margin:7px 0 11px;position:relative}
+.scopeChooserBtn{width:auto;max-width:100%;min-height:40px;border:1.5px solid #d7d4cc;border-radius:999px;background:#fff;color:var(--ink);padding:0 10px 0 11px;display:inline-flex;align-items:center;gap:6px;text-align:left;box-shadow:none;transition:background .12s ease,border-color .12s ease,transform .08s ease}
+.scopeChooserBtn:before{content:'';width:7px;height:7px;border-radius:50%;background:#ffd21f;border:1px solid #171717;flex:none}
+.scopeChooserBtn:active{transform:scale(.99)}
+.scopeChooserBtn span{font-size:11px;color:var(--muted);font-weight:800;letter-spacing:-.1px}
+.scopeChooserBtn strong{font-size:14px;font-weight:900;white-space:nowrap;letter-spacing:-.2px}
+.scopeChooserBtn b{width:18px;height:18px;display:grid;place-items:center;font-size:9px;line-height:1;color:#777;margin-left:1px}
+.scopeChooserBtn.active{background:#ffd21f;border:2px solid #171717;padding-left:10px}
+.scopeChooserBtn.active:before{background:#fff}
+.scopeChooserBtn.active span,.scopeChooserBtn.active b{color:#2c291d}
+.scopeChooserPanel{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px;padding:8px;background:#fff;border:1.5px solid #ddd9d0;border-radius:16px;box-shadow:none}
+.scopeChooserPanel .chip{margin:0;min-height:36px;padding:8px 12px}
+.scopeChooserPanel .chip.active{background:var(--accent)!important;border-color:#181817!important;color:#111!important}
+.managedGradeHelp{font-size:12px;line-height:1.45;color:var(--muted);font-weight:600;margin:5px 0 9px}
+.attendanceRecordCard{margin-top:14px}
+.recordHistoryTools{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.recordHistoryTools label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:800;color:var(--muted)}
+.compactSelect{min-height:44px;padding:0 12px}
+.recordExportRow{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.recordHistoryList{border-top:1px solid var(--line);padding-top:4px}
+.recordMonthGroup{border-bottom:1px solid var(--line)}
+.recordMonthGroup summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 2px;cursor:pointer}
+.recordMonthGroup summary::-webkit-details-marker{display:none}
+.recordMonthGroup summary strong{font-size:15px}
+.recordMonthGroup summary span{font-size:12px;color:var(--muted);font-weight:800}
+.recordMonthRows{padding:0 0 6px}
+.recordEditActions{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:430px){
+  .historyManage{align-items:flex-start;gap:10px}
+  .historyManage>span:first-child{min-width:0;flex:1}
+  .recordEditActions{max-width:145px}
+  .recordEditActions .secondary,.recordEditActions .recordDelete{padding-left:10px;padding-right:10px}
+}
+html[data-theme="dark"] .scopeChooserBtn{background:#242422!important;color:var(--ink)!important;border-color:var(--line)!important}
+html[data-theme="dark"] .scopeChooserBtn.active{background:#ffd21f!important;color:#111!important;border-color:#111!important}
+html[data-theme="dark"] .scopeChooserBtn.active span,html[data-theme="dark"] .scopeChooserBtn.active b{color:#342f19!important}
+html[data-theme="dark"] .scopeChooserPanel{background:#242422!important;border-color:var(--line)!important;box-shadow:none}
+html[data-theme="dark"] .scopeChooserBtn:before{border-color:#ddd!important}
