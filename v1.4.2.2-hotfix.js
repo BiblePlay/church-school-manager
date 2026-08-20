@@ -51,6 +51,7 @@
       const st=studentById(b.dataset.id); if(!st)return;
       pushUndo();
       st.grade = b.dataset.quickGrade==='미지정' ? '' : normalizeGrade(b.dataset.quickGrade);
+      if(st.grade && typeof v14ApplyGradeHomeroom==='function') v14ApplyGradeHomeroom(st);
       save(); toast(`${st.name} 학생 학년을 ${st.grade||'미지정'}으로 변경했습니다.`); render();
     });
     document.querySelectorAll('[data-record-range]').forEach(b=>b.onclick=()=>{ui.analyticsRange=b.dataset.recordRange;render();});

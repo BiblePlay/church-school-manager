@@ -1,8 +1,32 @@
 /* v1.4 integrated patch — student care filters, contacts/visits, 2 distribution packs, admin dashboard */
 
 // ---------- data migration ----------
+function v14AssignedTeacherNames(value){
+  const st=(value&&typeof value==='object'&&!Array.isArray(value))?value:null;
+  const stored=st&&Array.isArray(st.assignedTeachers)?st.assignedTeachers:[];
+  const legacy=String(st?st.assignedTeacher:(value||'')).trim();
+  const legacyNames=legacy?legacy.split(/\s*(?:·|\/|,|;|\||\+)\s*/).map(x=>x.trim()).filter(Boolean):[];
+  const source=legacyNames.length?legacyNames:stored;
+  return Array.from(new Set(source.map(x=>String(x||'').trim()).filter(Boolean))).slice(0,2);
+}
+function v14SetAssignedTeachers(st,names){
+  const clean=Array.from(new Set((names||[]).map(x=>String(x||'').trim()).filter(Boolean))).slice(0,2);
+  st.assignedTeachers=clean;
+  st.assignedTeacher=clean.join(' · ');
+  return st;
+}
+function v14ReadAssignedTeachers(){
+  return Array.from(document.querySelectorAll('[data-assigned-teacher-choice]:checked')).map(x=>x.value).filter(Boolean).slice(0,2);
+}
+function v14TeacherChoiceGrid(st){
+  const selected=v14AssignedTeacherNames(st);
+  const names=[...activeTeachers().map(t=>t.name),...selected].filter(Boolean);
+  const unique=Array.from(new Set(names)).sort((a,b)=>a.localeCompare(b,'ko'));
+  if(!unique.length)return '<div class="assignedTeacherEmpty">교사 명부에 교사를 먼저 등록해 주세요.</div>';
+  return `<div class="assignedTeacherPicker"><div class="assignedTeacherGrid">${unique.map(n=>`<label class="assignedTeacherChoice"><input type="checkbox" data-assigned-teacher-choice value="${attr(n)}" ${selected.includes(n)?'checked':''}><span>${esc(n)}</span></label>`).join('')}</div><small>한 반에 최대 2명까지 선택할 수 있습니다.</small></div>`;
+}
 function v14EnsureStudent(st){
-  st.assignedTeacher ||= '';
+  v14SetAssignedTeachers(st,v14AssignedTeacherNames(st));
   st.parentFaith ||= '미기재';
   if(st.parentFaith==='비신자')st.parentFaith='비신자 가정';
   if(st.parentFaith==='신자')st.parentFaith='신앙 가정(기존)';
@@ -25,6 +49,17 @@ state.students.forEach(v14EnsureStudent);
 state.teachers.forEach(v14EnsureTeacher);
 state.importedTextIds = Array.isArray(state.importedTextIds)?state.importedTextIds:[];
 state.settings.basePacketVersion = Number(state.settings.basePacketVersion||1);
+state.settings.gradeHomeroomTeachers = (state.settings.gradeHomeroomTeachers && typeof state.settings.gradeHomeroomTeachers==='object') ? state.settings.gradeHomeroomTeachers : {};
+function v14GradeHomeroomTeachers(grade){
+  const g=normalizeGrade(grade||'');
+  const raw=state.settings.gradeHomeroomTeachers?.[g];
+  return Array.isArray(raw)?raw.map(x=>String(x||'').trim()).filter(Boolean).slice(0,2):[];
+}
+function v14ApplyGradeHomeroom(st){
+  const names=v14GradeHomeroomTeachers(st?.grade);
+  if(st&&names.length)v14SetAssignedTeachers(st,names);
+  return names;
+}
 save();
 
 ui.studentFilters = ui.studentFilters || {grade:'전체',teacher:'전체',parentFaith:'전체',multicultural:'전체',otherDeptSibling:'전체',tag:'전체',team:'전체',gender:'전체',longAbsent:'전체'};
@@ -47,7 +82,7 @@ function v14LastVisit(st){
 }
 function v14FilterOptions(field){
   if(field==='teacher'){
-    const names=[...activeTeachers().map(t=>t.name),...active().map(s=>s.assignedTeacher)].filter(Boolean);
+    const names=[...activeTeachers().map(t=>t.name),...active().flatMap(s=>v14AssignedTeacherNames(s))].filter(Boolean);
     return ['전체',...Array.from(new Set(names)).sort((a,b)=>a.localeCompare(b,'ko'))];
   }
   if(field==='parentFaith'){
@@ -63,9 +98,10 @@ function v14FilterOptions(field){
   return ['전체',...grades()];
 }
 function v14TeacherSelectOptions(current=''){
-  const names=[...activeTeachers().map(t=>t.name),current].filter(Boolean);
+  const selected=v14AssignedTeacherNames(current),first=selected[0]||'';
+  const names=[...activeTeachers().map(t=>t.name),...selected].filter(Boolean);
   const unique=Array.from(new Set(names)).sort((a,b)=>a.localeCompare(b,'ko'));
-  return `<option value="">미지정</option>${unique.map(n=>`<option value="${attr(n)}" ${current===n?'selected':''}>${esc(n)}</option>`).join('')}`;
+  return `<option value="">미지정</option>${unique.map(n=>`<option value="${attr(n)}" ${first===n?'selected':''}>${esc(n)}</option>`).join('')}`;
 }
 function v14ParentFaithSelectOptions(current='미기재'){
   const opts=['미기재','부모 모두 신앙','한 분 신앙','비신자 가정'];
@@ -84,7 +120,7 @@ function v14FilteredStudents(){
   }
   // 학년/팀은 각 화면의 '보기' 선택기가 단일 기준이다.
   // 예전 고급 필터의 grade/team 값이 남아 있어도 목록을 다시 잘라내지 않는다.
-  if(f.teacher!=='전체') arr=arr.filter(s=>(s.assignedTeacher||'')===f.teacher);
+  if(f.teacher!=='전체') arr=arr.filter(s=>v14AssignedTeacherNames(s).includes(f.teacher));
   if(f.parentFaith!=='전체') arr=arr.filter(s=>{const v=s.parentFaith||'미기재';return f.parentFaith==='신앙 가정(기존)'?(v==='신앙 가정(기존)'||v==='신자'):v===f.parentFaith;});
   if(f.multicultural!=='전체') arr=arr.filter(s=>f.multicultural==='다문화 가정'?!!s.multicultural:!s.multicultural);
   if(f.otherDeptSibling!=='전체') arr=arr.filter(s=>f.otherDeptSibling==='타부서 형제자매 있음'?!!s.otherDeptSibling:!s.otherDeptSibling);
@@ -353,7 +389,7 @@ modalHtml=function(){
     const st=ui.modal.id?studentById(ui.modal.id):{name:'',grade:'',gender:'',birthday:'',phone:'',parentName:'',parentRelation:'',parentPhone:'',parent2Name:'',parent2Relation:'',parent2Phone:'',school:'',siblings:'',address:'',memo:'',assignedTeacher:'',parentFaith:'미기재',multicultural:false,otherDeptSibling:false,otherDeptSiblingNote:'',tags:[],extraContacts:[]};
     v14EnsureStudent(st);
     const extras=(st.extraContacts||[]).map(c=>`${c.name||''}|${c.relation||''}|${c.phone||''}`).join('\n');
-    return modal(`<div class="modalTitleRow"><div><div class="titleSmall">${ui.modal.id?'학생 정보 수정':'학생 추가'}</div><div class="muted">처음에는 이름과 학년만 넣어도 됩니다. 나머지는 나중에 보완하세요.</div></div>${close}</div><div class="form"><div class="formGrid"><input id="fName" class="input" placeholder="이름 *" value="${attr(st.name)}"><input id="fGrade" class="input" placeholder="학년 *" value="${attr(st.grade)}"></div><div class="formGrid"><select id="fGender" class="input"><option ${!st.gender?'selected':''}>미지정</option><option ${st.gender==='남'?'selected':''}>남</option><option ${st.gender==='여'?'selected':''}>여</option></select><input id="fBirthday" class="input" type="date" value="${attr(st.birthday||'')}"></div><label class="fieldLabel">담당교사<select id="fAssignedTeacher" class="input">${v14TeacherSelectOptions(st.assignedTeacher||'')}</select></label><div class="sectionMiniTitle">비교 정보</div><label class="fieldLabel">부모 신앙<select id="fParentFaith" class="input">${v14ParentFaithSelectOptions(st.parentFaith||'미기재')}</select></label><label class="checkLine compareCheck"><input id="fMulticultural" type="checkbox" ${st.multicultural?'checked':''}><span>다문화 가정</span></label><label class="checkLine compareCheck"><input id="fOtherDeptSibling" type="checkbox" ${st.otherDeptSibling?'checked':''}><span>우리 교회 다른 부서에 형제·자매 있음</span></label><input id="fOtherDeptSiblingNote" class="input" placeholder="형제·자매 이름 · 관계 · 부서 (예: 김민수 · 형 · 중등부)" value="${attr(st.otherDeptSiblingNote||'')}"><input id="fTags" class="input" placeholder="기타 분류 · 쉼표로 구분" value="${attr((st.tags||[]).join(', '))}"><div class="sectionMiniTitle">연락처</div><input id="fPhone" class="input" placeholder="학생 전화번호" value="${attr(st.phone||'')}"><div class="formGrid"><input id="fParentName" class="input" placeholder="보호자 1 이름" value="${attr(st.parentName||'')}"><input id="fParentRelation" class="input" placeholder="관계" value="${attr(st.parentRelation||'')}"></div><input id="fParentPhone" class="input" placeholder="보호자 1 전화번호" value="${attr(st.parentPhone||'')}"><div class="formGrid"><input id="fParent2Name" class="input" placeholder="보호자 2 이름" value="${attr(st.parent2Name||'')}"><input id="fParent2Relation" class="input" placeholder="관계" value="${attr(st.parent2Relation||'')}"></div><input id="fParent2Phone" class="input" placeholder="보호자 2 전화번호" value="${attr(st.parent2Phone||'')}"><label class="fieldLabel">기타 가족·친척 연락처<textarea id="fExtraContacts" class="input textarea" placeholder="한 줄에 이름|관계|전화번호\n예: 김할머니|외할머니|010-1234-5678">${esc(extras)}</textarea></label><div class="sectionMiniTitle">추가 정보</div><input id="fSchool" class="input" placeholder="학교" value="${attr(st.school||'')}"><input id="fSiblings" class="input" placeholder="형제관계" value="${attr(st.siblings||'')}"><input id="fAddress" class="input" placeholder="주소" value="${attr(st.address||'')}"><textarea id="fMemo" class="input textarea" placeholder="학생 기본 메모">${esc(st.memo||'')}</textarea><button class="primary fullBtn" data-act="saveStudent" data-id="${st.id||''}">저장</button>${ui.modal.id?`<button class="danger fullBtn" data-act="deactivateStudent" data-id="${st.id}">명단에서 제외</button>`:''}</div>`);
+    return modal(`<div class="modalTitleRow"><div><div class="titleSmall">${ui.modal.id?'학생 정보 수정':'학생 추가'}</div><div class="muted">처음에는 이름과 학년만 넣어도 됩니다. 나머지는 나중에 보완하세요.</div></div>${close}</div><div class="form"><div class="formGrid"><input id="fName" class="input" placeholder="이름 *" value="${attr(st.name)}"><input id="fGrade" class="input" placeholder="학년 *" value="${attr(st.grade)}"></div><div class="formGrid"><select id="fGender" class="input"><option ${!st.gender?'selected':''}>미지정</option><option ${st.gender==='남'?'selected':''}>남</option><option ${st.gender==='여'?'selected':''}>여</option></select><input id="fBirthday" class="input" type="date" value="${attr(st.birthday||'')}"></div><div class="fieldLabel">담당교사 · 최대 2명${v14TeacherChoiceGrid(st)}</div><div class="sectionMiniTitle">비교 정보</div><label class="fieldLabel">부모 신앙<select id="fParentFaith" class="input">${v14ParentFaithSelectOptions(st.parentFaith||'미기재')}</select></label><label class="checkLine compareCheck"><input id="fMulticultural" type="checkbox" ${st.multicultural?'checked':''}><span>다문화 가정</span></label><label class="checkLine compareCheck"><input id="fOtherDeptSibling" type="checkbox" ${st.otherDeptSibling?'checked':''}><span>우리 교회 다른 부서에 형제·자매 있음</span></label><input id="fOtherDeptSiblingNote" class="input" placeholder="형제·자매 이름 · 관계 · 부서 (예: 김민수 · 형 · 중등부)" value="${attr(st.otherDeptSiblingNote||'')}"><input id="fTags" class="input" placeholder="기타 분류 · 쉼표로 구분" value="${attr((st.tags||[]).join(', '))}"><div class="sectionMiniTitle">연락처</div><input id="fPhone" class="input" placeholder="학생 전화번호" value="${attr(st.phone||'')}"><div class="formGrid"><input id="fParentName" class="input" placeholder="보호자 1 이름" value="${attr(st.parentName||'')}"><input id="fParentRelation" class="input" placeholder="관계" value="${attr(st.parentRelation||'')}"></div><input id="fParentPhone" class="input" placeholder="보호자 1 전화번호" value="${attr(st.parentPhone||'')}"><div class="formGrid"><input id="fParent2Name" class="input" placeholder="보호자 2 이름" value="${attr(st.parent2Name||'')}"><input id="fParent2Relation" class="input" placeholder="관계" value="${attr(st.parent2Relation||'')}"></div><input id="fParent2Phone" class="input" placeholder="보호자 2 전화번호" value="${attr(st.parent2Phone||'')}"><label class="fieldLabel">기타 가족·친척 연락처<textarea id="fExtraContacts" class="input textarea" placeholder="한 줄에 이름|관계|전화번호\n예: 김할머니|외할머니|010-1234-5678">${esc(extras)}</textarea></label><div class="sectionMiniTitle">추가 정보</div><input id="fSchool" class="input" placeholder="학교" value="${attr(st.school||'')}"><input id="fSiblings" class="input" placeholder="형제관계" value="${attr(st.siblings||'')}"><input id="fAddress" class="input" placeholder="주소" value="${attr(st.address||'')}"><textarea id="fMemo" class="input textarea" placeholder="학생 기본 메모">${esc(st.memo||'')}</textarea><button class="primary fullBtn" data-act="saveStudent" data-id="${st.id||''}">저장</button>${ui.modal.id?`<button class="danger fullBtn" data-act="deactivateStudent" data-id="${st.id}">명단에서 제외</button>`:''}</div>`);
   }
   if(ui.modal?.type==='detail'){
     const st=studentById(ui.modal.id); if(!st)return '';
@@ -377,7 +413,9 @@ saveStudentForm=function(id){
   const name=document.getElementById('fName')?.value.trim(); if(!name)return toast('학생 이름을 입력해 주세요.');
   pushUndo(); let st=id?studentById(id):null; if(!st){st={id:uid('stu'),teams:[],photo:null,active:true};state.students.push(st);} v14EnsureStudent(st);
   const extras=String(document.getElementById('fExtraContacts')?.value||'').split(/\n+/).map(line=>{const [name,relation,phone]=line.split('|').map(x=>(x||'').trim());return {name,relation,phone};}).filter(x=>x.phone);
-  Object.assign(st,{name,grade:normalizeGrade(document.getElementById('fGrade')?.value.trim()),gender:document.getElementById('fGender')?.value||'미지정',birthday:document.getElementById('fBirthday')?.value||'',assignedTeacher:document.getElementById('fAssignedTeacher')?.value||'',parentFaith:document.getElementById('fParentFaith')?.value||'미기재',multicultural:!!document.getElementById('fMulticultural')?.checked,otherDeptSibling:!!document.getElementById('fOtherDeptSibling')?.checked,otherDeptSiblingNote:document.getElementById('fOtherDeptSibling')?.checked?(document.getElementById('fOtherDeptSiblingNote')?.value.trim()||''):'',tags:String(document.getElementById('fTags')?.value||'').split(',').map(x=>x.trim()).filter(Boolean),phone:document.getElementById('fPhone')?.value.trim()||'',parentName:document.getElementById('fParentName')?.value.trim()||'',parentRelation:document.getElementById('fParentRelation')?.value.trim()||'',parentPhone:document.getElementById('fParentPhone')?.value.trim()||'',parent2Name:document.getElementById('fParent2Name')?.value.trim()||'',parent2Relation:document.getElementById('fParent2Relation')?.value.trim()||'',parent2Phone:document.getElementById('fParent2Phone')?.value.trim()||'',extraContacts:extras,school:document.getElementById('fSchool')?.value.trim()||'',siblings:document.getElementById('fSiblings')?.value.trim()||'',address:document.getElementById('fAddress')?.value.trim()||'',memo:document.getElementById('fMemo')?.value.trim()||'',active:true});
+  Object.assign(st,{name,grade:normalizeGrade(document.getElementById('fGrade')?.value.trim()),gender:document.getElementById('fGender')?.value||'미지정',birthday:document.getElementById('fBirthday')?.value||'',parentFaith:document.getElementById('fParentFaith')?.value||'미기재',multicultural:!!document.getElementById('fMulticultural')?.checked,otherDeptSibling:!!document.getElementById('fOtherDeptSibling')?.checked,otherDeptSiblingNote:document.getElementById('fOtherDeptSibling')?.checked?(document.getElementById('fOtherDeptSiblingNote')?.value.trim()||''):'',tags:String(document.getElementById('fTags')?.value||'').split(',').map(x=>x.trim()).filter(Boolean),phone:document.getElementById('fPhone')?.value.trim()||'',parentName:document.getElementById('fParentName')?.value.trim()||'',parentRelation:document.getElementById('fParentRelation')?.value.trim()||'',parentPhone:document.getElementById('fParentPhone')?.value.trim()||'',parent2Name:document.getElementById('fParent2Name')?.value.trim()||'',parent2Relation:document.getElementById('fParent2Relation')?.value.trim()||'',parent2Phone:document.getElementById('fParent2Phone')?.value.trim()||'',extraContacts:extras,school:document.getElementById('fSchool')?.value.trim()||'',siblings:document.getElementById('fSiblings')?.value.trim()||'',address:document.getElementById('fAddress')?.value.trim()||'',memo:document.getElementById('fMemo')?.value.trim()||'',active:true});
+  v14SetAssignedTeachers(st,v14ReadAssignedTeachers());
+  if(!id) v14ApplyGradeHomeroom(st);
   save();ui.modal={type:'detail',id:st.id};toast(id?'학생 정보를 수정했습니다.':'학생을 추가했습니다.');render();
 };
 saveTeacherForm=function(id){

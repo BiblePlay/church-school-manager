@@ -34,6 +34,14 @@
     return items.map(v=>`<label><input type="checkbox" data-managed-${type}="${attr(v)}" ${(state.settings[type==='grade'?'managedGrades':'managedTeams']||[]).includes(v)?'checked':''}> ${esc(v)}</label>`).join('');
   }
 
+  function homeroomTeacherBlock(gs){
+    const teachers=activeTeachers().map(t=>t.name).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i);
+    if(!gs.length)return '<div class="muted">학생 학년을 먼저 등록해 주세요.</div>';
+    if(!teachers.length)return '<div class="muted">교사 명부에 교사를 먼저 등록하면 학년별 담임교사를 지정할 수 있습니다.</div>';
+    const map=state.settings.gradeHomeroomTeachers||{};
+    return `<div class="gradeHomeroomList">${gs.map(g=>{const selected=Array.isArray(map[g])?map[g]:[];return `<div class="gradeHomeroomRow"><strong>${esc(g)}</strong><div class="gradeHomeroomChoices">${teachers.map(n=>`<label><input type="checkbox" data-grade-homeroom="${attr(g)}" value="${attr(n)}" ${selected.includes(n)?'checked':''}><span>${esc(n)}</span></label>`).join('')}</div></div>`}).join('')}</div><div class="managedGradeHelp">한 학년당 최대 2명입니다. 저장하면 현재 그 학년 학생 전체에 공통 적용되고, 이후 새 학생도 자동으로 같은 담임교사를 받습니다. 공통 지정을 비워도 기존 학생별 담당교사 기록은 자동 삭제하지 않습니다.</div>`;
+  }
+
   // Final Settings is intentionally composed once here, after all legacy wrappers.
   // Existing action names/functions are reused; only duplicate entrances are reorganized.
   settingsView=function(){
@@ -43,6 +51,7 @@
       <label class="fieldLabel">부서 이름<input id="department" class="input" value="${attr(state.settings.department||'')}"></label>
       <div class="fieldLabel">사용 모드<div class="modeChoice"><label class="modeCard"><input type="radio" name="adminMode" value="teacher" ${!admin?'checked':''}><span>담당 선생님</span><small>담당 학년을 기본으로 시작 · 다른 학년도 보기에서 선택</small></label><label class="modeCard"><input type="radio" name="adminMode" value="admin" ${admin?'checked':''}><span>전체 관리자</span><small>모든 등록 학년을 전체로 시작 · 받은 데이터 병합</small></label></div><div class="modeHint">전체 관리자는 담당 학년을 선택하지 않아도 됩니다.</div></div>
       <div class="fieldLabel">내 담당 학년 · 복수 선택 가능<div class="managedGradeHelp">담당 선생님 모드의 기본 시작 학년입니다. 마지막으로 체크한 학년이 기본값이 되며, 데이터 접근을 제한하지 않습니다.</div><div class="managedGradeGrid">${managedLabels(gs,'grade')}</div></div>
+      <div class="fieldLabel gradeHomeroomField"><strong>학년별 담임교사 · 공통 적용</strong><div class="managedGradeHelp">학생마다 반복 지정하지 않고 학년에서 한 번 정합니다.</div>${homeroomTeacherBlock(gs)}</div>
       <div class="fieldLabel">내 담당 팀 · 복수 선택 가능<div class="managedGradeHelp">실제로 만든 팀만 표시됩니다. 팀을 선택해도 다른 학년·팀 데이터가 사라지지 않습니다.</div><div class="managedGradeGrid">${managedLabels(teams,'team')}</div></div>
       <label class="fieldLabel">달란트 버튼<input id="amounts" class="input" value="${attr((state.settings.amounts||[]).join(', '))}" placeholder="10, 20, 50, 100"></label>
       <label class="fieldLabel">장기 미출석 기준<select id="longAbsenceDays" class="input">${[[30,'1개월'],[60,'2개월 · 기본'],[90,'3개월'],[180,'6개월']].map(([v,l])=>`<option value="${v}" ${Number(state.settings.longAbsenceDays||60)===v?'selected':''}>${l}</option>`).join('')}</select></label>
@@ -64,7 +73,7 @@
       `<div class="grid2 settingsReportGrid"><button class="secondary" data-act="exportStudents">학생 명단 Excel</button><button class="secondary" data-act="exportTeachers">교사 명단 Excel</button><button class="secondary" data-act="exportAttendance">출석 Excel</button><button class="secondary" data-act="exportTalent">달란트 Excel</button></div><div class="settingsFootnote">학생·출석 자료에는 학년 정보가 포함됩니다. 출석 기록 화면에서는 현재 보기·연도·월 기준으로 Excel/TXT도 내보낼 수 있습니다.</div>`);
 
     const backupSection=settingsSection('백업 · 복구','기기 전체 상태를 사고 대비용으로 보관할 때',
-      `<div class="grid2"><button class="secondary" data-act="backup">전체 백업</button><button class="secondary" data-act="backupImport">백업 복원</button></div><div class="settingsFootnote">데이터팩과 다릅니다. 백업은 학생·교사·출석·달란트·설정 등 현재 앱 전체 상태를 복구하기 위한 파일입니다.</div>`);
+      `<div class="grid2"><button class="secondary" data-act="backup">전체 백업</button><button class="secondary" data-act="backupImport">백업 복원</button></div><button class="secondary fullBtn backupFolderBtn" data-act="setBackupFolder">백업 폴더 지정 · 변경</button><div class="settingsFootnote">지원 기기에서는 처음 한 번 위치를 고르면 그 안의 <b>‘교회학교 출석달란트 백업’</b> 폴더에 이후 백업이 자동 저장됩니다. iPhone/Safari 등 폴더 자동 지정이 지원되지 않는 기기는 기기의 기본 다운로드 위치를 사용합니다. 데이터팩과 달리 학생·교사·출석·달란트·설정 등 앱 전체 상태를 복구합니다.</div>`);
 
     const display=settingsSection('화면 · 설치','앱 표시와 홈 화면 설치',
       `<div class="themeChoice" role="group" aria-label="화면 모드"><button class="themeChoiceBtn ${mode==='system'?'active':''}" data-act="themeSystem">시스템</button><button class="themeChoiceBtn ${mode==='light'?'active':''}" data-act="themeLight">밝게</button><button class="themeChoiceBtn ${mode==='dark'?'active':''}" data-act="themeDark">어둡게</button></div><button class="secondary fullBtn installGuideBtn" data-act="appInstallGuide">홈 화면에 추가하는 방법</button>`);
@@ -73,6 +82,42 @@
       `<div class="row"><div><div class="label">초기화 · 이전 상태 복원</div><div class="muted">실행 전 자동 상태 보관 후 선택한 데이터만 정리합니다.</div></div><button class="secondary nowrap" data-act="dataManager">관리 열기</button></div>`,'dangerSettingsSection');
 
     return basic+org+importSection+packs+attendanceMove+reports+backupSection+display+danger;
+  };
+
+
+  // 학년별 담임교사를 설정에서 한 번 지정해 학생 전체에 공통 적용한다.
+  saveSettings=function(){
+    const dep=document.getElementById('department')?.value.trim()||'';
+    const nums=String(document.getElementById('amounts')?.value||'').split(',').map(v=>Number(v.trim())).filter(v=>Number.isFinite(v)&&v>0).slice(0,4);
+    if(nums.length<1)return toast('달란트 금액을 하나 이상 입력해 주세요.');
+    const adminMode=(document.querySelector('input[name="adminMode"]:checked')?.value||'admin')==='admin';
+    const managedGrades=[...document.querySelectorAll('[data-managed-grade]:checked')].map(x=>x.dataset.managedGrade);
+    const managedTeams=[...document.querySelectorAll('[data-managed-team]:checked')].map(x=>x.dataset.managedTeam);
+    const oldDefault=state.settings.managementScope;
+    const clicked=ui.settingsDefaultGrade;
+    const preferred=(clicked&&managedGrades.includes(clicked))?clicked:(managedGrades.includes(oldDefault)?oldDefault:(managedGrades[0]||'전체'));
+    const defaultScope=adminMode?'전체':preferred;
+    const homeroom={};
+    for(const g of grades()){
+      const names=[...document.querySelectorAll('[data-grade-homeroom]:checked')].filter(x=>x.dataset.gradeHomeroom===g).map(x=>x.value).filter(Boolean).slice(0,2);
+      if(names.length)homeroom[g]=names;
+    }
+    state.settings.department=dep||'교회학교';
+    state.settings.adminMode=adminMode;
+    state.settings.managementScope=defaultScope;
+    state.settings.amounts=nums;
+    state.settings.managedGrades=managedGrades;
+    state.settings.managedTeams=managedTeams;
+    state.settings.gradeHomeroomTeachers=homeroom;
+    const la=document.getElementById('longAbsenceDays');if(la)state.settings.longAbsenceDays=Number(la.value)||60;
+    for(const st of active()){
+      const names=homeroom[st.grade];
+      if(names?.length&&typeof v14SetAssignedTeachers==='function')v14SetAssignedTeachers(st,names);
+    }
+    ui.attendanceGrade=defaultScope;ui.analyticsScope=defaultScope;ui.studentGrade=defaultScope;ui.filterType='학년';ui.filterValue=defaultScope;ui.scopeMenu=null;ui.settingsDefaultGrade=null;
+    save();
+    toast(adminMode?'설정과 학년별 담임교사를 저장했습니다.':(defaultScope==='전체'?'담당 학년 제한 없이 저장했습니다.':`${defaultScope} 기본 시작 · 학년별 담임교사를 저장했습니다.`));
+    render();
   };
 
   const priorModalHtml_v15312 = modalHtml;
@@ -121,6 +166,20 @@
     }
     return priorHandleAct_v15320(act,b);
   };
+
+
+  const priorBind_v15323=bind;
+  bind=function(){
+    priorBind_v15323();
+    document.querySelectorAll('[data-grade-homeroom]').forEach(box=>box.onchange=()=>{
+      const g=box.dataset.gradeHomeroom;
+      const checked=[...document.querySelectorAll('[data-grade-homeroom]:checked')].filter(x=>x.dataset.gradeHomeroom===g);
+      if(checked.length>2){box.checked=false;toast('한 학년의 담임교사는 최대 2명까지 지정할 수 있습니다.');}
+    });
+  };
+  const homeroomStyle=document.createElement('style');
+  homeroomStyle.textContent=`.gradeHomeroomField{padding-top:4px}.gradeHomeroomList{display:grid;gap:10px;margin-top:8px}.gradeHomeroomRow{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;align-items:start;padding:10px;border:1.5px solid #dedbd3;border-radius:15px;background:#faf9f5}.gradeHomeroomRow>strong{padding-top:10px;font-size:13px}.gradeHomeroomChoices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.gradeHomeroomChoices label{position:relative}.gradeHomeroomChoices input{position:absolute;opacity:0;pointer-events:none}.gradeHomeroomChoices span{display:flex;align-items:center;justify-content:center;min-height:40px;padding:7px 9px;border:1.5px solid #d8d3c9;border-radius:12px;background:#fff;font-size:12px;font-weight:850;text-align:center}.gradeHomeroomChoices input:checked+span{background:#ffd21f;border-color:#171717;color:#171717}@media(max-width:430px){.gradeHomeroomRow{grid-template-columns:52px minmax(0,1fr)}.gradeHomeroomChoices{grid-template-columns:1fr 1fr}}`;
+  document.head.appendChild(homeroomStyle);
 
   render();
 })();

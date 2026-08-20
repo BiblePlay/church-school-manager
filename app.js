@@ -1,4 +1,4 @@
-const APP_VERSION = '1.5.3.21';
+const APP_VERSION = '1.5.3.23';
 const STORAGE_KEY = 'church-school-mobile-v4'; // v0.4 데이터 그대로 이어서 사용
 
 const sampleStudents = [];
@@ -647,6 +647,7 @@ function handleAct(act,b){
   if(act==='resetTeachers')return resetData('teachers');
   if(act==='resetAll')return resetData('all');
   if(act==='backup')return backup();
+  if(act==='setBackupFolder')return setBackupFolder();
   if(act==='backupImport'){document.getElementById('backupImport').click();return;}
   if(act==='exportStudents')return exportWorkbook('students');
   if(act==='exportAttendance')return exportWorkbook('attendance');
@@ -938,7 +939,17 @@ function confirmMerge(){
   save();pendingMerge=null;ui.modal=null;toast(`업데이트 · 출석 ${attN} · 달란트 ${txN} · 교사 ${teacherN}${added?` · 새 학생 ${added}`:''}`);render();
 }
 
-function backup(){download(`교회학교_전체백업_${todayKey()}.json`,JSON.stringify(state,null,2),'application/json');}
+const BACKUP_FOLDER_NAME='교회학교 출석달란트 백업';
+const BACKUP_HANDLE_DB='church-school-backup-handle-v1';
+function backupHandleDb(){return new Promise((resolve,reject)=>{const req=indexedDB.open(BACKUP_HANDLE_DB,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('handles'))req.result.createObjectStore('handles');};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
+async function backupHandleGet(){const db=await backupHandleDb();return new Promise((resolve,reject)=>{const tx=db.transaction('handles','readonly'),r=tx.objectStore('handles').get('directory');r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error);tx.oncomplete=()=>db.close();});}
+async function backupHandleSet(handle){const db=await backupHandleDb();return new Promise((resolve,reject)=>{const tx=db.transaction('handles','readwrite');tx.objectStore('handles').put(handle,'directory');tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>{db.close();reject(tx.error);};});}
+async function backupDirPermission(handle){try{const opt={mode:'readwrite'};if(await handle.queryPermission?.(opt)==='granted')return true;return await handle.requestPermission?.(opt)==='granted';}catch(_){return false;}}
+async function chooseBackupFolder(){if(!window.isSecureContext||!('showDirectoryPicker' in window))return null;const root=await window.showDirectoryPicker({id:'church-school-backup',mode:'readwrite',startIn:'downloads'});const dir=root.name===BACKUP_FOLDER_NAME?root:await root.getDirectoryHandle(BACKUP_FOLDER_NAME,{create:true});await backupHandleSet(dir);return dir;}
+async function getBackupFolder(promptIfMissing=true){if(!window.isSecureContext||!('showDirectoryPicker' in window))return null;try{const saved=await backupHandleGet();if(saved&&await backupDirPermission(saved))return saved;}catch(_){ }return promptIfMissing?chooseBackupFolder():null;}
+function backupTimestamp(){const d=new Date();return `${todayKey()}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`;}
+async function backup(){const name=`교회학교_전체백업_${backupTimestamp()}.json`,data=JSON.stringify(state,null,2);if(window.isSecureContext&&'showDirectoryPicker' in window){try{const dir=await getBackupFolder(true);if(dir){const fh=await dir.getFileHandle(name,{create:true}),w=await fh.createWritable();await w.write(new Blob([data],{type:'application/json'}));await w.close();toast(`백업 완료 · ${BACKUP_FOLDER_NAME}`);return;}}catch(err){if(err?.name==='AbortError')return toast('백업 폴더 선택을 취소했습니다.');console.warn('backup folder save failed',err);toast('지정 폴더 저장에 실패해 기기 다운로드 위치로 저장합니다.');}}download(name,data,'application/json');toast('백업 완료 · 기기 다운로드 위치에 저장했습니다.');}
+async function setBackupFolder(){if(!window.isSecureContext||!('showDirectoryPicker' in window))return toast('이 기기에서는 백업 폴더 자동 지정이 지원되지 않아 기기 다운로드 위치를 사용합니다.');try{const dir=await chooseBackupFolder();if(dir)toast(`백업 폴더 지정 완료 · ${BACKUP_FOLDER_NAME}`);}catch(err){if(err?.name!=='AbortError'){console.warn(err);toast('백업 폴더를 지정하지 못했습니다.');}}}
 function resetData(kind){
   const labels={students:'현재 학생 명단',teams:'팀',attendance:'출석 기록',talent:'달란트 기록',teachers:'교사 데이터',all:'전체 데이터'};
   const label=labels[kind]||'데이터';
