@@ -1,4 +1,4 @@
-const APP_VERSION = '1.5.3.20';
+const APP_VERSION = '1.5.3.21';
 const STORAGE_KEY = 'church-school-mobile-v4'; // v0.4 데이터 그대로 이어서 사용
 
 const sampleStudents = [];
@@ -80,7 +80,7 @@ function migrate(x){
   s.settings.managedTeams = Array.isArray(s.settings.managedTeams)?s.settings.managedTeams:[];
   if(typeof s.settings.adminMode!=='boolean') s.settings.adminMode=true;
   if(!['care','youth'].includes(s.settings.profileAccess))s.settings.profileAccess='care';
-  s.students.forEach(st=>{ st.teams=Array.isArray(st.teams)?st.teams:[]; st.grade=st.grade||''; st.parentRelation=st.parentRelation||''; st.parent2Name=st.parent2Name||''; st.parent2Relation=st.parent2Relation||''; st.parent2Phone=st.parent2Phone||''; st.longTermManual=!!st.longTermManual; if(st.active===undefined)st.active=true; });
+  s.students.forEach(st=>{ st.teams=Array.isArray(st.teams)?st.teams:[]; st.grade=st.grade||''; st.parentRelation=st.parentRelation||''; st.parent2Name=st.parent2Name||''; st.parent2Relation=st.parent2Relation||''; st.parent2Phone=st.parent2Phone||''; st.longTermManual=!!st.longTermManual; if(st.otherDeptSibling===undefined)st.otherDeptSibling=false; st.otherDeptSiblingNote=st.otherDeptSiblingNote||''; if(st.active===undefined)st.active=true; });
   s.teachers.forEach(t=>{ t.birthday=t.birthday||''; t.emergencyPhone=t.emergencyPhone||''; if(t.active===undefined)t.active=true; });
   return s;
 }
@@ -1175,7 +1175,7 @@ function confirmImport(){
 
 function exportWorkbook(kind){
   let rows=[],filename='교회학교';
-  if(kind==='students'){filename='학생명단';rows=[['이름','학년','성별','생일','학생전화','보호자1','관계1','보호자1연락처','보호자2','관계2','보호자2연락처','학교','형제관계','주소','기타']];active().forEach(s=>rows.push([s.name,s.grade,s.gender,s.birthday,s.phone,s.parentName,s.parentRelation||'',s.parentPhone,s.parent2Name||'',s.parent2Relation||'',s.parent2Phone||'',s.school,s.siblings,s.address,s.memo]));}
+  if(kind==='students'){filename='학생명단';rows=[['이름','학년','성별','생일','담당교사','부모신앙','다문화','타부서형제자매','타부서형제자매비고','학생전화','보호자1','관계1','보호자1연락처','보호자2','관계2','보호자2연락처','학교','형제관계','주소','기타']];active().forEach(s=>rows.push([s.name,s.grade,s.gender,s.birthday,s.assignedTeacher||'',s.parentFaith||'',s.multicultural?'해당':'해당 없음',s.otherDeptSibling?'있음':'없음',s.otherDeptSiblingNote||'',s.phone,s.parentName,s.parentRelation||'',s.parentPhone,s.parent2Name||'',s.parent2Relation||'',s.parent2Phone||'',s.school,s.siblings,s.address,s.memo]));}
   if(kind==='attendance'){filename='출석기록';rows=[['날짜','학생ID','이름','학년','상태','메모']];Object.keys(state.sessions).sort().forEach(k=>Object.entries(state.sessions[k].attendance||{}).forEach(([id,a])=>{const s=studentById(id);if(s)rows.push([k,id,s.name,s.grade,statusLabel(a.status),a.memo||'']);}));}
   if(kind==='talent'){filename='달란트기록';rows=[['날짜','시간','기록ID','학생ID','이름','학년','유형','금액','기본금액','배수','리셋전잔액']];Object.keys(state.sessions).sort().forEach(k=>(state.sessions[k].transactions||[]).forEach(t=>(t.studentIds||[]).forEach(id=>{const s=studentById(id);if(s)rows.push([k,t.time,t.id,id,s.name,s.grade,t.kind==='reset'?'리셋':t.amount<0?'차감':'지급',t.amount,t.base,t.multiplier,t.kind==='reset'?(t.resetFrom?.[id]??''):'']);})));}
   if(kind==='teachers'){filename='교사명단';rows=[['교사ID','이름','담당','생일','전화번호','비상연락처','비고']];activeTeachers().forEach(t=>rows.push([t.id,t.name,t.role,t.birthday||'',t.phone,t.emergencyPhone||'',t.memo]));}

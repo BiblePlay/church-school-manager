@@ -4,7 +4,11 @@
 function v14EnsureStudent(st){
   st.assignedTeacher ||= '';
   st.parentFaith ||= '미기재';
+  if(st.parentFaith==='비신자')st.parentFaith='비신자 가정';
+  if(st.parentFaith==='신자')st.parentFaith='신앙 가정(기존)';
   if(st.multicultural===undefined) st.multicultural=false;
+  if(st.otherDeptSibling===undefined) st.otherDeptSibling=false;
+  st.otherDeptSiblingNote ||= '';
   st.tags = Array.isArray(st.tags) ? st.tags : String(st.tags||'').split(',').map(x=>x.trim()).filter(Boolean);
   st.visitLogs = Array.isArray(st.visitLogs) ? st.visitLogs : [];
   st.extraContacts = Array.isArray(st.extraContacts) ? st.extraContacts : [];
@@ -23,7 +27,9 @@ state.importedTextIds = Array.isArray(state.importedTextIds)?state.importedTextI
 state.settings.basePacketVersion = Number(state.settings.basePacketVersion||1);
 save();
 
-ui.studentFilters = ui.studentFilters || {grade:'전체',teacher:'전체',parentFaith:'전체',multicultural:'전체',tag:'전체',team:'전체',gender:'전체',longAbsent:'전체'};
+ui.studentFilters = ui.studentFilters || {grade:'전체',teacher:'전체',parentFaith:'전체',multicultural:'전체',otherDeptSibling:'전체',tag:'전체',team:'전체',gender:'전체',longAbsent:'전체'};
+if(!('otherDeptSibling' in ui.studentFilters))ui.studentFilters.otherDeptSibling='전체';
+ui.studentFilters.tag='전체';
 ui.studentFilters.grade='전체'; ui.studentFilters.team='전체';
 ui.dashboardRange = ui.dashboardRange || 6;
 
@@ -40,31 +46,53 @@ function v14LastVisit(st){
   return logs[0]||null;
 }
 function v14FilterOptions(field){
-  if(field==='teacher') return ['전체',...Array.from(new Set(active().map(s=>s.assignedTeacher).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ko'))];
-  if(field==='parentFaith') return ['전체','신자','비신자','미기재'];
-  if(field==='multicultural') return ['전체','다문화','일반/미기재'];
-  if(field==='tag') return ['전체',...Array.from(new Set(active().flatMap(s=>s.tags||[]))).sort((a,b)=>a.localeCompare(b,'ko'))];
+  if(field==='teacher'){
+    const names=[...activeTeachers().map(t=>t.name),...active().map(s=>s.assignedTeacher)].filter(Boolean);
+    return ['전체',...Array.from(new Set(names)).sort((a,b)=>a.localeCompare(b,'ko'))];
+  }
+  if(field==='parentFaith'){
+    const base=['전체','부모 모두 신앙','한 분 신앙','비신자 가정','미기재'];
+    if(active().some(s=>s.parentFaith==='신앙 가정(기존)'||s.parentFaith==='신자'))base.splice(base.length-1,0,'신앙 가정(기존)');
+    return base;
+  }
+  if(field==='multicultural') return ['전체','다문화 가정','일반 가정'];
+  if(field==='otherDeptSibling') return ['전체','타부서 형제자매 있음','없음'];
   if(field==='team') return ['전체',...allTeams()];
-  if(field==='gender') return ['전체','남','여','미지정'];
+  if(field==='gender') return ['전체','남','여'];
   if(field==='longAbsent') return ['전체','장기 미출석','최근 출석'];
   return ['전체',...grades()];
+}
+function v14TeacherSelectOptions(current=''){
+  const names=[...activeTeachers().map(t=>t.name),current].filter(Boolean);
+  const unique=Array.from(new Set(names)).sort((a,b)=>a.localeCompare(b,'ko'));
+  return `<option value="">미지정</option>${unique.map(n=>`<option value="${attr(n)}" ${current===n?'selected':''}>${esc(n)}</option>`).join('')}`;
+}
+function v14ParentFaithSelectOptions(current='미기재'){
+  const opts=['미기재','부모 모두 신앙','한 분 신앙','비신자 가정'];
+  if(current==='신앙 가정(기존)'&&!opts.includes(current))opts.splice(1,0,current);
+  return opts.map(v=>`<option value="${attr(v)}" ${current===v?'selected':''}>${v==='신앙 가정(기존)'?'신앙 가정 (기존 · 확인 필요)':esc(v)}</option>`).join('');
 }
 function v14FilteredStudents(){
   // 담당 학년은 '기본 시작 범위'일 뿐 접근 제한이 아니다.
   // 학생 명부의 실제 데이터 원본은 항상 등록된 전체 활성 학생이다.
   let arr=active();
   const f=ui.studentFilters;
+  // 청년교사용에서는 민감한 비교정보 필터를 화면뿐 아니라 실제 조건에서도 비활성화한다.
+  // 역할을 바꾼 직후 이전 임원용 필터 값이 메모리에 남아 목록을 숨기는 회귀를 막는다.
+  if(state.settings.profileAccess==='youth'){
+    f.parentFaith='전체'; f.multicultural='전체'; f.otherDeptSibling='전체'; f.tag='전체';
+  }
   // 학년/팀은 각 화면의 '보기' 선택기가 단일 기준이다.
   // 예전 고급 필터의 grade/team 값이 남아 있어도 목록을 다시 잘라내지 않는다.
   if(f.teacher!=='전체') arr=arr.filter(s=>(s.assignedTeacher||'')===f.teacher);
-  if(f.parentFaith!=='전체') arr=arr.filter(s=>(s.parentFaith||'미기재')===f.parentFaith);
-  if(f.multicultural!=='전체') arr=arr.filter(s=>f.multicultural==='다문화'?!!s.multicultural:!s.multicultural);
-  if(f.tag!=='전체') arr=arr.filter(s=>(s.tags||[]).includes(f.tag));
-  if(f.gender!=='전체') arr=arr.filter(s=>(s.gender||'미지정')===f.gender);
+  if(f.parentFaith!=='전체') arr=arr.filter(s=>{const v=s.parentFaith||'미기재';return f.parentFaith==='신앙 가정(기존)'?(v==='신앙 가정(기존)'||v==='신자'):v===f.parentFaith;});
+  if(f.multicultural!=='전체') arr=arr.filter(s=>f.multicultural==='다문화 가정'?!!s.multicultural:!s.multicultural);
+  if(f.otherDeptSibling!=='전체') arr=arr.filter(s=>f.otherDeptSibling==='타부서 형제자매 있음'?!!s.otherDeptSibling:!s.otherDeptSibling);
+  if(f.gender!=='전체') arr=arr.filter(s=>s.gender===f.gender);
   if(f.longAbsent!=='전체') arr=arr.filter(s=>f.longAbsent==='장기 미출석'?longAbsenceInfo(s).long:!longAbsenceInfo(s).long);
   return sortStudents(arr,state.settings.studentSort||'name');
 }
-function v14AppliedFilterCount(){ return Object.entries(ui.studentFilters).filter(([k,v])=>!['grade','team'].includes(k)&&v&&v!=='전체').length; }
+function v14AppliedFilterCount(){ return Object.entries(ui.studentFilters).filter(([k,v])=>!['grade','team','tag'].includes(k)&&v&&v!=='전체').length; }
 function v14VisitGapDays(st){
   const last=v14LastVisit(st); if(!last?.date)return null;
   return Math.max(0,Math.floor((new Date(`${todayKey()}T12:00:00`)-new Date(`${last.date}T12:00:00`))/86400000));
@@ -76,15 +104,16 @@ studentsView = function(){
   const list=v14FilteredStudents();
   const fcount=v14AppliedFilterCount();
   const longN=list.filter(s=>longAbsenceInfo(s).long).length;
+  const care=state.settings.profileAccess!=='youth';
   const month=new Date().getMonth()+1;
-  const birthN=list.filter(s=>Number(String(s.birthday||'').slice(5,7))===month).length;
-  return `<section class="studentHero"><div><small>학생 관리</small><strong>${list.length}<span>명</span></strong></div><div class="studentHeroStats"><span>장기 미출석 <b>${longN}</b></span><span>${month}월 생일 <b>${birthN}</b></span></div></section>
+  const birthN=care?list.filter(s=>Number(String(s.birthday||'').slice(5,7))===month).length:0;
+  return `<section class="studentHero"><div><small>학생 관리</small><strong>${list.length}<span>명</span></strong></div><div class="studentHeroStats"><span>장기 미출석 <b>${longN}</b></span>${care?`<span>${month}월 생일 <b>${birthN}</b></span>`:''}</div></section>
     <div class="studentActionGrid"><button class="primary" data-act="addStudent">+ 학생 추가</button><button class="contrastBtn" data-act="studentFilter">필터${fcount?` · ${fcount}`:''}</button><button class="contrastBtn" data-act="manageStudentList">명단 정리</button></div>
     <div class="sortBar strongSort"><span>정렬</span>${[['name','가나다'],['grade','학년']].map(([v,l])=>`<button class="sortBtn ${state.settings.studentSort===v?'active':''}" data-stu-sort="${v}">${l}</button>`).join('')}</div>
     ${fcount?`<div class="filterSummary"><strong>필터 ${fcount}개 적용</strong><span>${list.length}명만 표시 중</span><button data-act="clearStudentFilters">전체 보기</button></div>`:''}
-    <div class="list">${list.map(st=>{const lv=v14LastVisit(st);return `<button class="studentRow ${st.photo?'hasPhoto':'noPhoto'}" data-detail="${st.id}">${avatarCell(st)}<span><span class="studentName">${esc(st.name)}</span><span class="studentMeta">${esc(st.grade||'학년 미지정')}${st.assignedTeacher?' · '+esc(st.assignedTeacher):''}${st.parentFaith&&st.parentFaith!=='미기재'?' · 부모 '+esc(st.parentFaith):''}</span>${lv?`<span class="visitMini">최근 ${esc(lv.date.slice(5).replace('-','/'))} · ${esc((lv.note||'심방').slice(0,22))}</span>`:''}</span><span class="amount">${fmt(totalAmt(st.id))}<small>달란트</small></span></button>`}).join('')||'<div class="empty">조건에 맞는 학생이 없습니다.</div>'}</div>
+    <div class="list">${list.map(st=>{const lv=care?v14LastVisit(st):null;return `<button class="studentRow ${st.photo?'hasPhoto':'noPhoto'}" data-detail="${st.id}">${avatarCell(st)}<span><span class="studentName">${esc(st.name)}</span><span class="studentMeta">${esc(st.grade||'학년 미지정')}${st.assignedTeacher?' · '+esc(st.assignedTeacher):''}${care&&st.parentFaith&&st.parentFaith!=='미기재'?' · 부모 '+esc(st.parentFaith):''}</span>${lv?`<span class="visitMini">최근 ${esc(lv.date.slice(5).replace('-','/'))} · ${esc((lv.note||'심방').slice(0,22))}</span>`:''}</span><span class="amount">${fmt(totalAmt(st.id))}<small>달란트</small></span></button>`}).join('')||'<div class="empty">조건에 맞는 학생이 없습니다.</div>'}</div>
     <div class="divider"></div>
-    <div class="studentQuickCards"><button class="quickDark" data-act="birthdayList"><strong>월별 생일자</strong><small>생일 자동 분류</small></button><button class="quickYellow" data-act="manageTeachers"><strong>교사 명부</strong><small>전화 · 문자 바로 연결</small></button></div>`;
+    <div class="studentQuickCards ${care?'':'single'}">${care?'<button class="quickDark" data-act="birthdayList"><strong>월별 생일자</strong><small>생일 자동 분류</small></button>':''}<button class="quickYellow" data-act="manageTeachers"><strong>교사 명부</strong><small>전화 · 문자 바로 연결</small></button></div>`;
 };
 
 // ---------- admin dashboard ----------
@@ -121,8 +150,71 @@ const __v13RecordsView = recordsView;
 recordsView = function(){
   const original=__v13RecordsView();
   if(!state.settings.adminMode) return original;
-  return `<div class="recordsModeRow"><button class="dashLaunch" data-act="openDashboard">▣ 부서 현황</button></div>${original}`;
+  return `<div class="recordsModeRow"><button class="dashLaunch" data-act="openDashboard">▣ 부서 현황</button><button class="studentAnalysisLaunch" data-act="openStudentAnalysis">◉ 학생 분석</button></div>${original}`;
 };
+
+// ---------- officer student-composition analysis ----------
+ui.studentAnalysisScope = ui.studentAnalysisScope || '전체';
+ui.studentAnalysisCategory = ui.studentAnalysisCategory || 'parentFaith';
+
+function v14AnalysisScopeStudents(scope='전체'){
+  if(scope==='전체')return active();
+  return active().filter(st=>st.grade===scope);
+}
+function v14AnalysisScopeOptions(){return ['전체',...grades()];}
+function v14AnalysisSpec(category,list){
+  const specs={
+    gender:{title:'성별 비율',subtitle:'등록된 남·여 학생 비율',groups:[
+      {key:'male',label:'남',color:'#171612',match:s=>s.gender==='남'},
+      {key:'female',label:'여',color:'#ffd21f',match:s=>s.gender==='여'}
+    ],missing:s=>!['남','여'].includes(s.gender)},
+    parentFaith:{title:'부모 신앙',subtitle:'가정의 신앙 배경을 비교합니다.',groups:[
+      {key:'both',label:'부모 모두 신앙',color:'#171612',match:s=>s.parentFaith==='부모 모두 신앙'},
+      {key:'one',label:'한 분 신앙',color:'#ffd21f',match:s=>s.parentFaith==='한 분 신앙'},
+      {key:'none',label:'비신자 가정',color:'#8f8b82',match:s=>s.parentFaith==='비신자 가정'}
+    ],missing:s=>!['부모 모두 신앙','한 분 신앙','비신자 가정'].includes(s.parentFaith)},
+    multicultural:{title:'다문화 가정',subtitle:'다문화 가정 여부를 비교합니다.',groups:[
+      {key:'yes',label:'다문화 가정',color:'#ffd21f',match:s=>!!s.multicultural},
+      {key:'no',label:'일반 가정',color:'#171612',match:s=>!s.multicultural}
+    ],missing:()=>false},
+    otherDeptSibling:{title:'타부서 형제·자매',subtitle:'우리 교회 다른 부서에 형제·자매가 있는지 봅니다.',groups:[
+      {key:'yes',label:'있음',color:'#ffd21f',match:s=>!!s.otherDeptSibling},
+      {key:'no',label:'없음',color:'#171612',match:s=>!s.otherDeptSibling}
+    ],missing:()=>false}
+  };
+  return specs[category]||specs.parentFaith;
+}
+function v14AnalysisData(category,scope){
+  const list=v14AnalysisScopeStudents(scope),spec=v14AnalysisSpec(category,list);
+  const rows=spec.groups.map(g=>({...g,count:list.filter(g.match).length}));
+  const classified=rows.reduce((n,r)=>n+r.count,0);
+  const missing=list.filter(spec.missing||(()=>false)).length;
+  return {list,spec,rows,classified,missing};
+}
+function v14DonutStyle(rows,total){
+  if(!total)return 'background:#ece9e2';
+  let cursor=0;const parts=[];
+  rows.forEach(r=>{const next=cursor+(r.count/total*100);parts.push(`${r.color} ${cursor.toFixed(3)}% ${next.toFixed(3)}%`);cursor=next;});
+  if(cursor<100)parts.push(`#ece9e2 ${cursor.toFixed(3)}% 100%`);
+  return `background:conic-gradient(${parts.join(',')})`;
+}
+function v14StudentAnalysisHtml(){
+  const scope=v14AnalysisScopeOptions().includes(ui.studentAnalysisScope)?ui.studentAnalysisScope:'전체';
+  ui.studentAnalysisScope=scope;
+  const category=ui.studentAnalysisCategory||'parentFaith';
+  const d=v14AnalysisData(category,scope),denom=d.list.length||0;
+  const cats=[['gender','성별'],['parentFaith','부모 신앙'],['multicultural','다문화'],['otherDeptSibling','타부서 형제자매']];
+  // 비율의 분모는 항상 현재 보고 있는 전체 학생 수다. 값이 비어 있으면 도넛의 회색 미분류 영역으로 남긴다.
+  const rows=d.rows.map(r=>{const pct=denom?Math.round(r.count/denom*100):0;return `<button class="analysisLegendRow" data-act="openStudentAnalysisGroup" data-analysis-key="${r.key}"><span class="analysisDot" style="background:${r.color}"></span><span><strong>${esc(r.label)}</strong><small>${r.count}명 · ${pct}%</small></span><b>›</b></button>`}).join('');
+  return `<div class="studentAnalysisIntro"><strong>${esc(scope)} 학생 구성</strong><small>임원·양육교사용 내부 현황입니다. 학생 상세의 비교 정보가 바로 반영됩니다.</small></div>
+    <div class="analysisScopeChips">${v14AnalysisScopeOptions().map(v=>`<button class="chip ${scope===v?'active':''}" data-act="setStudentAnalysisScope" data-analysis-scope="${attr(v)}">${esc(v)}</button>`).join('')}</div>
+    <div class="analysisCategoryTabs">${cats.map(([k,l])=>`<button class="${category===k?'active':''}" data-act="setStudentAnalysisCategory" data-analysis-category="${k}">${l}</button>`).join('')}</div>
+    <section class="analysisChartCard"><div class="analysisChartHead"><div><strong>${esc(d.spec.title)}</strong><small>${esc(d.spec.subtitle)}</small></div><span>${d.list.length}명</span></div><div class="analysisDonutWrap"><div class="analysisDonut" style="${v14DonutStyle(d.rows,denom)}"><div><strong>${d.list.length}</strong><small>전체 학생</small></div></div></div>${d.missing?`<div class="analysisMissing">미분류 ${d.missing}명 · 회색 영역입니다. 학생 상세에서 값을 선택하면 비율에 반영됩니다.</div>`:''}<div class="analysisLegend">${rows}</div></section>`;
+}
+function v14AnalysisGroupStudents(category,key,scope){
+  const d=v14AnalysisData(category,scope),g=d.rows.find(x=>x.key===key);
+  return {title:g?.label||'학생',students:g?d.list.filter(g.match):[]};
+}
 
 // ---------- packet export/import ----------
 function v14MinimalStudent(st){ return {id:st.id,name:st.name,grade:st.grade||'',gender:st.gender||'',teams:clone(st.teams||[]),assignedTeacher:st.assignedTeacher||'',active:true}; }
@@ -232,10 +324,20 @@ settingsView=function(){
 const __v13ModalHtml=modalHtml;
 modalHtml=function(){
   const close=`<button class="icon" data-act="closeModal">×</button>`;
+  if(ui.modal?.type==='studentAnalysis'){
+    return modal(`<div class="modalTitleRow"><div><div class="titleSmall">학생 분석</div><div class="muted">전체 학생 구성을 도넛 차트로 확인합니다.</div></div>${close}</div>${v14StudentAnalysisHtml()}`);
+  }
+  if(ui.modal?.type==='studentAnalysisList'){
+    const category=ui.modal.category||ui.studentAnalysisCategory||'parentFaith',scope=ui.modal.scope||ui.studentAnalysisScope||'전체';
+    const g=v14AnalysisGroupStudents(category,ui.modal.key,scope);
+    return modal(`<div class="modalTitleRow"><div><div class="titleSmall">${esc(g.title)}</div><div class="muted">${esc(scope)} · ${g.students.length}명</div></div><button class="icon" data-act="backStudentAnalysis">‹</button></div><div class="analysisStudentList">${g.students.sort(koName).map(st=>`<button class="analysisStudentRow" data-detail="${st.id}"><span><strong>${esc(st.name)}</strong><small>${esc(st.grade||'학년 미지정')}${st.assignedTeacher?` · ${esc(st.assignedTeacher)}`:''}</small>${st.otherDeptSibling&&st.otherDeptSiblingNote?`<em>${esc(st.otherDeptSiblingNote)}</em>`:''}</span><b>›</b></button>`).join('')||'<div class="empty">해당 학생이 없습니다.</div>'}</div>`);
+  }
   if(ui.modal?.type==='studentFilters'){
     const f=ui.studentFilters;
     const row=(key,label)=>`<label class="filterField"><span>${label}</span><select class="input" data-filter-key="${key}">${v14FilterOptions(key).map(v=>`<option ${f[key]===v?'selected':''}>${esc(v)}</option>`).join('')}</select></label>`;
-    return modal(`<div class="modalTitleRow"><div><div class="titleSmall">학생 필터</div><div class="muted">학년·팀은 화면의 ‘보기’에서 선택하고, 여기서는 추가 조건만 고릅니다.</div></div>${close}</div><div class="filterGrid">${row('teacher','담당교사')}${row('parentFaith','부모 신앙')}${row('multicultural','다문화')}${row('tag','기타 분류')}${row('gender','성별')}${row('longAbsent','출석 상태')}</div><div class="notice">학년·팀 선택과 중복되지 않습니다. 이 분류는 내부 관리용이며 출석·달란트 공유에는 포함되지 않습니다.</div><div class="grid2"><button class="secondary" data-act="clearStudentFilters">전체 해제</button><button class="primary" data-act="applyStudentFilters">필터 적용</button></div>`);
+    const teacherRow=v14FilterOptions('teacher').length>1?row('teacher','담당교사'):'';
+    const care=state.settings.profileAccess!=='youth';
+    return modal(`<div class="modalTitleRow"><div><div class="titleSmall">학생 필터</div><div class="muted">학년·팀은 화면의 ‘보기’에서 선택하고, 여기서는 추가 조건만 고릅니다.</div></div>${close}</div><div class="filterGrid">${teacherRow}${care?row('parentFaith','부모 신앙')+row('multicultural','다문화')+row('otherDeptSibling','타부서 형제자매'):''}${row('gender','성별')}${row('longAbsent','출석 상태')}</div>${care?'<div class="notice">비교 정보는 임원·양육교사용 내부 관리에만 사용하며 출석·달란트 공유와 청년교사용 데이터팩에는 포함하지 않습니다.</div>':'<div class="notice">청년교사용에서는 학생 민감 비교정보를 표시하지 않습니다.</div>'}<div class="grid2"><button class="secondary" data-act="clearStudentFilters">전체 해제</button><button class="primary" data-act="applyStudentFilters">필터 적용</button></div>`);
   }
   if(ui.modal?.type==='dashboard'){
     return modal(`<div class="modalTitleRow"><div><div class="titleSmall">부서 현황</div><div class="muted">월별 흐름과 학년별 상태를 한 화면에서 확인합니다.</div></div>${close}</div><div class="chips">${scopeOptionsWithManaged().map(v=>`<button class="chip ${ui.analyticsScope===v?'active':''}" data-analytics-scope="${attr(v)}">${esc(v)}</button>`).join('')}</div>${v14DashboardHtml()}`);
@@ -248,10 +350,10 @@ modalHtml=function(){
     return modal(`<div class="modalTitleRow"><div><div class="titleSmall">받은 기록 확인</div><div class="muted">합치기 전에 날짜와 인원을 확인합니다.</div></div>${close}</div><div class="card">${kv('종류',p.type==='attendance'?'출석':'달란트')}${kv('날짜',p.date)}${kv('범위',p.scope||'')}${kv('찾은 학생',`${p.matched}명`)}${kv('찾지 못한 이름',`${p.unknown.length}명`)}${p.duplicate?kv('중복','이미 가져온 기록'):''}</div>${p.unknown.length?`<div class="notice">찾지 못함: ${esc(p.unknown.join(', '))}</div>`:''}<button class="primary fullBtn" data-act="confirmPastedRecord" ${p.duplicate?'disabled':''}>${p.duplicate?'이미 반영됨':'기록 합치기'}</button>`);
   }
   if(ui.modal?.type==='studentForm'){
-    const st=ui.modal.id?studentById(ui.modal.id):{name:'',grade:'',gender:'',birthday:'',phone:'',parentName:'',parentRelation:'',parentPhone:'',parent2Name:'',parent2Relation:'',parent2Phone:'',school:'',siblings:'',address:'',memo:'',assignedTeacher:'',parentFaith:'미기재',multicultural:false,tags:[],extraContacts:[]};
+    const st=ui.modal.id?studentById(ui.modal.id):{name:'',grade:'',gender:'',birthday:'',phone:'',parentName:'',parentRelation:'',parentPhone:'',parent2Name:'',parent2Relation:'',parent2Phone:'',school:'',siblings:'',address:'',memo:'',assignedTeacher:'',parentFaith:'미기재',multicultural:false,otherDeptSibling:false,otherDeptSiblingNote:'',tags:[],extraContacts:[]};
     v14EnsureStudent(st);
     const extras=(st.extraContacts||[]).map(c=>`${c.name||''}|${c.relation||''}|${c.phone||''}`).join('\n');
-    return modal(`<div class="modalTitleRow"><div><div class="titleSmall">${ui.modal.id?'학생 정보 수정':'학생 추가'}</div><div class="muted">처음에는 이름과 학년만 넣어도 됩니다. 나머지는 나중에 보완하세요.</div></div>${close}</div><div class="form"><div class="formGrid"><input id="fName" class="input" placeholder="이름 *" value="${attr(st.name)}"><input id="fGrade" class="input" placeholder="학년 *" value="${attr(st.grade)}"></div><div class="formGrid"><select id="fGender" class="input"><option ${!st.gender?'selected':''}>미지정</option><option ${st.gender==='남'?'selected':''}>남</option><option ${st.gender==='여'?'selected':''}>여</option></select><input id="fBirthday" class="input" type="date" value="${attr(st.birthday||'')}"></div><input id="fAssignedTeacher" class="input" placeholder="담당교사 (예: 김선생)" value="${attr(st.assignedTeacher||'')}"><div class="formGrid"><select id="fParentFaith" class="input"><option ${st.parentFaith==='미기재'?'selected':''}>미기재</option><option ${st.parentFaith==='신자'?'selected':''}>신자</option><option ${st.parentFaith==='비신자'?'selected':''}>비신자</option></select><select id="fMulticultural" class="input"><option value="no" ${!st.multicultural?'selected':''}>다문화 미체크</option><option value="yes" ${st.multicultural?'selected':''}>다문화</option></select></div><input id="fTags" class="input" placeholder="기타 분류 · 쉼표로 구분" value="${attr((st.tags||[]).join(', '))}"><div class="sectionMiniTitle">연락처</div><input id="fPhone" class="input" placeholder="학생 전화번호" value="${attr(st.phone||'')}"><div class="formGrid"><input id="fParentName" class="input" placeholder="보호자 1 이름" value="${attr(st.parentName||'')}"><input id="fParentRelation" class="input" placeholder="관계" value="${attr(st.parentRelation||'')}"></div><input id="fParentPhone" class="input" placeholder="보호자 1 전화번호" value="${attr(st.parentPhone||'')}"><div class="formGrid"><input id="fParent2Name" class="input" placeholder="보호자 2 이름" value="${attr(st.parent2Name||'')}"><input id="fParent2Relation" class="input" placeholder="관계" value="${attr(st.parent2Relation||'')}"></div><input id="fParent2Phone" class="input" placeholder="보호자 2 전화번호" value="${attr(st.parent2Phone||'')}"><label class="fieldLabel">기타 가족·친척 연락처<textarea id="fExtraContacts" class="input textarea" placeholder="한 줄에 이름|관계|전화번호\n예: 김할머니|외할머니|010-1234-5678">${esc(extras)}</textarea></label><div class="sectionMiniTitle">추가 정보</div><input id="fSchool" class="input" placeholder="학교" value="${attr(st.school||'')}"><input id="fSiblings" class="input" placeholder="형제관계" value="${attr(st.siblings||'')}"><input id="fAddress" class="input" placeholder="주소" value="${attr(st.address||'')}"><textarea id="fMemo" class="input textarea" placeholder="학생 기본 메모">${esc(st.memo||'')}</textarea><button class="primary fullBtn" data-act="saveStudent" data-id="${st.id||''}">저장</button>${ui.modal.id?`<button class="danger fullBtn" data-act="deactivateStudent" data-id="${st.id}">명단에서 제외</button>`:''}</div>`);
+    return modal(`<div class="modalTitleRow"><div><div class="titleSmall">${ui.modal.id?'학생 정보 수정':'학생 추가'}</div><div class="muted">처음에는 이름과 학년만 넣어도 됩니다. 나머지는 나중에 보완하세요.</div></div>${close}</div><div class="form"><div class="formGrid"><input id="fName" class="input" placeholder="이름 *" value="${attr(st.name)}"><input id="fGrade" class="input" placeholder="학년 *" value="${attr(st.grade)}"></div><div class="formGrid"><select id="fGender" class="input"><option ${!st.gender?'selected':''}>미지정</option><option ${st.gender==='남'?'selected':''}>남</option><option ${st.gender==='여'?'selected':''}>여</option></select><input id="fBirthday" class="input" type="date" value="${attr(st.birthday||'')}"></div><label class="fieldLabel">담당교사<select id="fAssignedTeacher" class="input">${v14TeacherSelectOptions(st.assignedTeacher||'')}</select></label><div class="sectionMiniTitle">비교 정보</div><label class="fieldLabel">부모 신앙<select id="fParentFaith" class="input">${v14ParentFaithSelectOptions(st.parentFaith||'미기재')}</select></label><label class="checkLine compareCheck"><input id="fMulticultural" type="checkbox" ${st.multicultural?'checked':''}><span>다문화 가정</span></label><label class="checkLine compareCheck"><input id="fOtherDeptSibling" type="checkbox" ${st.otherDeptSibling?'checked':''}><span>우리 교회 다른 부서에 형제·자매 있음</span></label><input id="fOtherDeptSiblingNote" class="input" placeholder="형제·자매 이름 · 관계 · 부서 (예: 김민수 · 형 · 중등부)" value="${attr(st.otherDeptSiblingNote||'')}"><input id="fTags" class="input" placeholder="기타 분류 · 쉼표로 구분" value="${attr((st.tags||[]).join(', '))}"><div class="sectionMiniTitle">연락처</div><input id="fPhone" class="input" placeholder="학생 전화번호" value="${attr(st.phone||'')}"><div class="formGrid"><input id="fParentName" class="input" placeholder="보호자 1 이름" value="${attr(st.parentName||'')}"><input id="fParentRelation" class="input" placeholder="관계" value="${attr(st.parentRelation||'')}"></div><input id="fParentPhone" class="input" placeholder="보호자 1 전화번호" value="${attr(st.parentPhone||'')}"><div class="formGrid"><input id="fParent2Name" class="input" placeholder="보호자 2 이름" value="${attr(st.parent2Name||'')}"><input id="fParent2Relation" class="input" placeholder="관계" value="${attr(st.parent2Relation||'')}"></div><input id="fParent2Phone" class="input" placeholder="보호자 2 전화번호" value="${attr(st.parent2Phone||'')}"><label class="fieldLabel">기타 가족·친척 연락처<textarea id="fExtraContacts" class="input textarea" placeholder="한 줄에 이름|관계|전화번호\n예: 김할머니|외할머니|010-1234-5678">${esc(extras)}</textarea></label><div class="sectionMiniTitle">추가 정보</div><input id="fSchool" class="input" placeholder="학교" value="${attr(st.school||'')}"><input id="fSiblings" class="input" placeholder="형제관계" value="${attr(st.siblings||'')}"><input id="fAddress" class="input" placeholder="주소" value="${attr(st.address||'')}"><textarea id="fMemo" class="input textarea" placeholder="학생 기본 메모">${esc(st.memo||'')}</textarea><button class="primary fullBtn" data-act="saveStudent" data-id="${st.id||''}">저장</button>${ui.modal.id?`<button class="danger fullBtn" data-act="deactivateStudent" data-id="${st.id}">명단에서 제외</button>`:''}</div>`);
   }
   if(ui.modal?.type==='detail'){
     const st=studentById(ui.modal.id); if(!st)return '';
@@ -275,7 +377,7 @@ saveStudentForm=function(id){
   const name=document.getElementById('fName')?.value.trim(); if(!name)return toast('학생 이름을 입력해 주세요.');
   pushUndo(); let st=id?studentById(id):null; if(!st){st={id:uid('stu'),teams:[],photo:null,active:true};state.students.push(st);} v14EnsureStudent(st);
   const extras=String(document.getElementById('fExtraContacts')?.value||'').split(/\n+/).map(line=>{const [name,relation,phone]=line.split('|').map(x=>(x||'').trim());return {name,relation,phone};}).filter(x=>x.phone);
-  Object.assign(st,{name,grade:normalizeGrade(document.getElementById('fGrade')?.value.trim()),gender:document.getElementById('fGender')?.value||'미지정',birthday:document.getElementById('fBirthday')?.value||'',assignedTeacher:document.getElementById('fAssignedTeacher')?.value.trim()||'',parentFaith:document.getElementById('fParentFaith')?.value||'미기재',multicultural:document.getElementById('fMulticultural')?.value==='yes',tags:String(document.getElementById('fTags')?.value||'').split(',').map(x=>x.trim()).filter(Boolean),phone:document.getElementById('fPhone')?.value.trim()||'',parentName:document.getElementById('fParentName')?.value.trim()||'',parentRelation:document.getElementById('fParentRelation')?.value.trim()||'',parentPhone:document.getElementById('fParentPhone')?.value.trim()||'',parent2Name:document.getElementById('fParent2Name')?.value.trim()||'',parent2Relation:document.getElementById('fParent2Relation')?.value.trim()||'',parent2Phone:document.getElementById('fParent2Phone')?.value.trim()||'',extraContacts:extras,school:document.getElementById('fSchool')?.value.trim()||'',siblings:document.getElementById('fSiblings')?.value.trim()||'',address:document.getElementById('fAddress')?.value.trim()||'',memo:document.getElementById('fMemo')?.value.trim()||'',active:true});
+  Object.assign(st,{name,grade:normalizeGrade(document.getElementById('fGrade')?.value.trim()),gender:document.getElementById('fGender')?.value||'미지정',birthday:document.getElementById('fBirthday')?.value||'',assignedTeacher:document.getElementById('fAssignedTeacher')?.value||'',parentFaith:document.getElementById('fParentFaith')?.value||'미기재',multicultural:!!document.getElementById('fMulticultural')?.checked,otherDeptSibling:!!document.getElementById('fOtherDeptSibling')?.checked,otherDeptSiblingNote:document.getElementById('fOtherDeptSibling')?.checked?(document.getElementById('fOtherDeptSiblingNote')?.value.trim()||''):'',tags:String(document.getElementById('fTags')?.value||'').split(',').map(x=>x.trim()).filter(Boolean),phone:document.getElementById('fPhone')?.value.trim()||'',parentName:document.getElementById('fParentName')?.value.trim()||'',parentRelation:document.getElementById('fParentRelation')?.value.trim()||'',parentPhone:document.getElementById('fParentPhone')?.value.trim()||'',parent2Name:document.getElementById('fParent2Name')?.value.trim()||'',parent2Relation:document.getElementById('fParent2Relation')?.value.trim()||'',parent2Phone:document.getElementById('fParent2Phone')?.value.trim()||'',extraContacts:extras,school:document.getElementById('fSchool')?.value.trim()||'',siblings:document.getElementById('fSiblings')?.value.trim()||'',address:document.getElementById('fAddress')?.value.trim()||'',memo:document.getElementById('fMemo')?.value.trim()||'',active:true});
   save();ui.modal={type:'detail',id:st.id};toast(id?'학생 정보를 수정했습니다.':'학생을 추가했습니다.');render();
 };
 saveTeacherForm=function(id){
@@ -312,9 +414,14 @@ shareCurrentTalent=async function(){const list=filterStudents();const total=list
 const __v13HandleAct=handleAct;
 handleAct=function(act,b){
   if(act==='studentFilter'){ui.modal={type:'studentFilters'};return render();}
-  if(act==='clearStudentFilters'){ui.studentFilters={grade:'전체',teacher:'전체',parentFaith:'전체',multicultural:'전체',tag:'전체',team:'전체',gender:'전체',longAbsent:'전체'};ui.modal=null;return render();}
+  if(act==='clearStudentFilters'){ui.studentFilters={grade:'전체',teacher:'전체',parentFaith:'전체',multicultural:'전체',otherDeptSibling:'전체',tag:'전체',team:'전체',gender:'전체',longAbsent:'전체'};ui.modal=null;return render();}
   if(act==='applyStudentFilters'){document.querySelectorAll('[data-filter-key]').forEach(el=>ui.studentFilters[el.dataset.filterKey]=el.value);ui.modal=null;return render();}
   if(act==='openDashboard'){ui.modal={type:'dashboard'};return render();}
+  if(act==='openStudentAnalysis'){if(state.settings.profileAccess==='youth')return toast('학생 분석은 임원·양육교사용 기능입니다.');ui.studentAnalysisScope='전체';ui.studentAnalysisCategory=ui.studentAnalysisCategory||'parentFaith';ui.modal={type:'studentAnalysis'};return render();}
+  if(act==='setStudentAnalysisScope'){ui.studentAnalysisScope=b.dataset.analysisScope||'전체';ui.modal={type:'studentAnalysis'};return render();}
+  if(act==='setStudentAnalysisCategory'){ui.studentAnalysisCategory=b.dataset.analysisCategory||'parentFaith';ui.modal={type:'studentAnalysis'};return render();}
+  if(act==='openStudentAnalysisGroup'){ui.modal={type:'studentAnalysisList',category:ui.studentAnalysisCategory||'parentFaith',scope:ui.studentAnalysisScope||'전체',key:b.dataset.analysisKey||''};return render();}
+  if(act==='backStudentAnalysis'){ui.modal={type:'studentAnalysis'};return render();}
   if(act==='exportCarePack')return v14ExportPack('care');
   if(act==='exportYouthPack')return v14ExportPack('youth');
   if(act==='pasteRecord'){ui.modal={type:'pasteRecord'};return render();}

@@ -9,7 +9,7 @@
     'name','grade','gender','birthday','phone',
     'parentName','parentRelation','parentPhone',
     'parent2Name','parent2Relation','parent2Phone',
-    'address','school','siblings','memo','assignedTeacher','parentFaith','multicultural','photo'
+    'address','school','siblings','memo','assignedTeacher','parentFaith','multicultural','otherDeptSibling','otherDeptSiblingNote','photo'
   ];
 
   function nonBlank(v){
@@ -44,6 +44,8 @@
     assignedTeacher:['담당교사','담임교사','담당선생님','담임선생님'],
     parentFaith:['부모신앙','부모신앙여부','학부모신앙','신자비신자'],
     multicultural:['다문화','다문화가정','다문화여부'],
+    otherDeptSibling:['타부서형제자매','다른부서형제자매','타부서형제','다른부서형제','교회타부서형제자매'],
+    otherDeptSiblingNote:['타부서형제자매비고','다른부서형제자매비고','타부서형제비고','형제자매부서','타부서형제자매상세'],
     memo:['기타','기재사항','비고','메모','특이사항']
   };
   labelField=function(v){
@@ -51,7 +53,7 @@
     for(const [k,arr] of Object.entries(fieldMap)) if(arr.some(a=>normalize(a)===n)) return k;
     return null;
   };
-  blankStudent=function(){return {id:'',name:'',grade:'',gender:'',birthday:'',phone:'',parentName:'',parentRelation:'',parentPhone:'',parent2Name:'',parent2Relation:'',parent2Phone:'',address:'',school:'',siblings:'',memo:'',assignedTeacher:'',parentFaith:'',multicultural:'',teams:[]};};
+  blankStudent=function(){return {id:'',name:'',grade:'',gender:'',birthday:'',phone:'',parentName:'',parentRelation:'',parentPhone:'',parent2Name:'',parent2Relation:'',parent2Phone:'',address:'',school:'',siblings:'',memo:'',assignedTeacher:'',parentFaith:'',multicultural:'',otherDeptSibling:'',otherDeptSiblingNote:'',teams:[]};};
   comparableFields=function(){return PROFILE_FIELDS.filter(x=>x!=='name');};
 
   function normalizeIncomingStudent(n){
@@ -60,11 +62,18 @@
     x.grade=normalizeGrade(x.grade);
     if(nonBlank(x.multicultural)){
       const v=String(x.multicultural).trim().toLowerCase();
-      x.multicultural=['1','true','yes','y','예','네','다문화','해당'].includes(v) || x.multicultural===true;
+      x.multicultural=['1','true','yes','y','예','네','다문화','해당','다문화 가정'].includes(v) || x.multicultural===true;
     }else x.multicultural='';
+    if(nonBlank(x.otherDeptSibling)){
+      const v=String(x.otherDeptSibling).trim().toLowerCase();
+      x.otherDeptSibling=['1','true','yes','y','예','네','있음','해당','체크'].includes(v) || x.otherDeptSibling===true;
+    }else x.otherDeptSibling='';
     if(x.parentFaith){
       const v=String(x.parentFaith).trim();
-      if(/비신자/.test(v))x.parentFaith='비신자'; else if(/신자/.test(v))x.parentFaith='신자';
+      if(/부모.*모두|모두.*신앙/.test(v))x.parentFaith='부모 모두 신앙';
+      else if(/한\s*분|한쪽|한\s*명/.test(v))x.parentFaith='한 분 신앙';
+      else if(/비신자/.test(v))x.parentFaith='비신자 가정';
+      else if(/^신자$/.test(v))x.parentFaith='신앙 가정(기존)';
     }
     return x;
   }
@@ -162,7 +171,7 @@
   }
   function baseStudentForYouth(st){return {id:st.id,name:st.name,grade:st.grade||'',gender:st.gender||'',teams:safeArray(st.teams),assignedTeacher:st.assignedTeacher||'',active:true};}
   function distributionRevision(){
-    const core={students:active().map(s=>({id:s.id,name:s.name,grade:s.grade,birthday:s.birthday,phone:s.phone,parentPhone:s.parentPhone,parent2Phone:s.parent2Phone,address:s.address,teams:s.teams})),teachers:activeTeachers().map(t=>({id:t.id,name:t.name,role:t.role,phone:t.phone,birthday:t.birthday})),teams:state.teams};
+    const core={students:active().map(s=>({id:s.id,name:s.name,grade:s.grade,birthday:s.birthday,phone:s.phone,parentPhone:s.parentPhone,parent2Phone:s.parent2Phone,address:s.address,teams:s.teams,assignedTeacher:s.assignedTeacher,parentFaith:s.parentFaith,multicultural:!!s.multicultural,otherDeptSibling:!!s.otherDeptSibling,otherDeptSiblingNote:s.otherDeptSiblingNote||'',siblings:s.siblings||''})),teachers:activeTeachers().map(t=>({id:t.id,name:t.name,role:t.role,phone:t.phone,birthday:t.birthday})),teams:state.teams};
     return fnv1a(JSON.stringify(core));
   }
   v14DistributionPacket=function(kind){
@@ -191,12 +200,12 @@
 
   const YOUTH_SENSITIVE_FIELDS=[
     'birthday','phone','parentName','parentRelation','parentPhone','parent2Name','parent2Relation','parent2Phone',
-    'address','school','siblings','memo','parentFaith','multicultural','tags','extraContacts','visitLogs','photo'
+    'address','school','siblings','memo','parentFaith','multicultural','otherDeptSibling','otherDeptSiblingNote','tags','extraContacts','visitLogs','photo'
   ];
   function clearYouthSensitive(st){
     for(const k of YOUTH_SENSITIVE_FIELDS){
       if(['tags','extraContacts','visitLogs'].includes(k))st[k]=[];
-      else if(k==='multicultural')st[k]=false;
+      else if(k==='multicultural'||k==='otherDeptSibling')st[k]=false;
       else st[k]=null;
     }
   }

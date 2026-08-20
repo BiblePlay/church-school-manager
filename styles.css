@@ -564,3 +564,32 @@ html[data-theme="dark"] .packImportMode,
 html[data-theme="dark"] .dangerGroup{background:var(--card)!important;color:var(--ink)!important;border-color:var(--line)!important}
 html[data-theme="dark"] .packImportMode.replace{background:#3a3315!important;border-color:#8b7718!important}
 html[data-theme="dark"] .dangerSettingsSection{background:#2a2221!important;border-color:#533a36!important}
+
+/* v1.5.3.21 — officer student analysis + comparison fields */
+.recordsModeRow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.recordsModeRow .dashLaunch,.recordsModeRow .studentAnalysisLaunch{width:100%;min-height:50px;border:2px solid #171612;border-radius:17px;padding:11px 9px;font-size:13px;font-weight:950;display:flex;align-items:center;justify-content:center;gap:7px}
+.recordsModeRow .dashLaunch{background:#ffd21f;color:#171612}
+.recordsModeRow .studentAnalysisLaunch{background:#fff;color:#171612}
+.studentAnalysisIntro{background:#171612;color:#fff;border-radius:18px;padding:14px 15px;margin-bottom:10px}
+.studentAnalysisIntro strong,.studentAnalysisIntro small{display:block}.studentAnalysisIntro strong{font-size:16px}.studentAnalysisIntro small{font-size:10px;line-height:1.45;color:#d2cdc2;margin-top:4px}
+.analysisScopeChips{display:flex;gap:7px;overflow:auto;scrollbar-width:none;padding:1px 1px 9px}.analysisScopeChips::-webkit-scrollbar{display:none}
+.analysisCategoryTabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px}.analysisCategoryTabs button{min-height:43px;border:1.5px solid #d8d3c9;border-radius:14px;background:#fff;color:#171612;font-size:11px;font-weight:900;padding:8px}.analysisCategoryTabs button.active{background:#ffd21f;border-color:#171612}
+.analysisChartCard{background:#fff;border:1.5px solid #d8d3c9;border-radius:22px;padding:15px}.analysisChartHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.analysisChartHead>div{display:grid;gap:3px}.analysisChartHead strong{font-size:17px}.analysisChartHead small{font-size:10px;line-height:1.4;color:#777269}.analysisChartHead>span{background:#f1efe9;border-radius:999px;padding:6px 9px;font-size:10px;font-weight:900;white-space:nowrap}
+.analysisDonutWrap{display:grid;place-items:center;padding:20px 0 16px}.analysisDonut{width:min(230px,68vw);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;position:relative;box-shadow:inset 0 0 0 1px rgba(0,0,0,.05)}.analysisDonut:after{content:'';position:absolute;width:58%;aspect-ratio:1;border-radius:50%;background:#fff;box-shadow:0 0 0 1px #ece8de}.analysisDonut>div{position:relative;z-index:1;text-align:center;display:grid;gap:2px}.analysisDonut strong{font-size:34px;line-height:1}.analysisDonut small{font-size:10px;color:#777269;font-weight:850}
+.analysisLegend{display:grid;gap:7px}.analysisLegendRow{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;width:100%;border:1.5px solid #e0dcd3;background:#fff;border-radius:15px;padding:11px 12px;text-align:left}.analysisLegendRow span:nth-child(2){display:grid;gap:2px}.analysisLegendRow strong{font-size:13px}.analysisLegendRow small{font-size:10px;color:#777269}.analysisLegendRow>b{font-size:20px}.analysisDot{width:13px;height:13px;border-radius:50%;border:1px solid rgba(0,0,0,.08)}.analysisMissing{background:#fff4df;border:1px solid #edd695;border-radius:12px;padding:8px 10px;margin-bottom:9px;font-size:10px;line-height:1.45;color:#5d4c19}
+.analysisStudentList{display:grid;gap:8px}.analysisStudentRow{width:100%;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;text-align:left;border:1.5px solid #d8d3c9;background:#fff;border-radius:16px;padding:13px 14px}.analysisStudentRow span{display:grid;gap:3px}.analysisStudentRow strong{font-size:15px}.analysisStudentRow small{font-size:10px;color:#777269}.analysisStudentRow em{font-size:10px;color:#5d4c19;font-style:normal;background:#fff4df;border-radius:8px;padding:4px 6px;width:max-content;max-width:100%}.analysisStudentRow>b{font-size:20px}
+.compareCheck{border:1.5px solid #d8d3c9;border-radius:13px;padding:11px 12px;background:#fff}.compareCheck input{width:19px;height:19px;accent-color:#ffd21f}
+@media(max-width:365px){.recordsModeRow{grid-template-columns:1fr 1fr}.recordsModeRow .dashLaunch,.recordsModeRow .studentAnalysisLaunch{font-size:12px;padding:10px 6px}.analysisCategoryTabs{grid-template-columns:1fr 1fr}.analysisDonut{width:min(205px,72vw)}}
+html[data-theme="dark"] .recordsModeRow .studentAnalysisLaunch,html[data-theme="dark"] .analysisChartCard,html[data-theme="dark"] .analysisCategoryTabs button,html[data-theme="dark"] .analysisLegendRow,html[data-theme="dark"] .analysisStudentRow,html[data-theme="dark"] .compareCheck{background:#20201e;color:#f5f2ea;border-color:#4a4944}
+html[data-theme="dark"] .analysisCategoryTabs button.active,html[data-theme="dark"] .recordsModeRow .dashLaunch{background:#ffd21f;color:#111;border-color:#ffd21f}
+html[data-theme="dark"] .analysisDonut:after{background:#20201e;box-shadow:0 0 0 1px #4a4944}html[data-theme="dark"] .analysisDonut small,html[data-theme="dark"] .analysisChartHead small,html[data-theme="dark"] .analysisLegendRow small,html[data-theme="dark"] .analysisStudentRow small{color:#b9b5aa}
+html[data-theme="dark"] .analysisChartHead>span{background:#30302d;color:#eee}html[data-theme="dark"] .analysisMissing,html[data-theme="dark"] .analysisStudentRow em{background:#40391d;color:#f2df9f;border-color:#665b2d}
+
+/* v1.5.3.21 final polish */
+.recordsModeRow.single{grid-template-columns:1fr}
+.studentQuickCards.single{grid-template-columns:1fr!important}
+html[data-theme="dark"] .sdEdit,
+html[data-theme="dark"] .sdSummary,
+html[data-theme="dark"] .compareCheckCard,
+html[data-theme="dark"] .compareOption span{background:#20201e!important;color:#f5f2ea!important;border-color:#4a4944!important}
+html[data-theme="dark"] .compareHelp{background:#30302d!important;color:#c9c5ba!important}

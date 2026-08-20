@@ -83,22 +83,27 @@
 
     // Student form: keep all existing fields, add permanent delete in same management screen.
     if(ui.modal.type==='studentForm'){
-      const st=ui.modal.id?studentById(ui.modal.id):{name:'',grade:'',gender:'미지정',birthday:'',phone:'',parentName:'',parentRelation:'',parentPhone:'',parent2Name:'',parent2Relation:'',parent2Phone:'',school:'',siblings:'',address:'',memo:'',assignedTeacher:'',parentFaith:'미기재',multicultural:false,tags:[],extraContacts:[]};
+      const st=ui.modal.id?studentById(ui.modal.id):{name:'',grade:'',gender:'미지정',birthday:'',phone:'',parentName:'',parentRelation:'',parentPhone:'',parent2Name:'',parent2Relation:'',parent2Phone:'',school:'',siblings:'',address:'',memo:'',assignedTeacher:'',parentFaith:'미기재',multicultural:false,otherDeptSibling:false,otherDeptSiblingNote:'',tags:[],extraContacts:[]};
       v14EnsureStudent(st);
+      const care=state.settings.profileAccess!=='youth';
       const extras=(st.extraContacts||[]).map(c=>`${c.name||''}|${c.relation||''}|${c.phone||''}`).join('\n');
       const back=`<button class="icon" data-act="${ui.modal.id?'backStudentDetail':'closeModal'}" data-id="${st.id||''}" aria-label="뒤로">‹</button>`;
       return modal(`<div class="modalTitleRow"><div><div class="titleSmall">${ui.modal.id?'학생 정보 수정':'학생 추가'}</div><div class="muted">처음에는 이름과 학년만 입력해도 됩니다.</div></div>${back}</div>
         <div class="form recoveryForm"><div class="studentPhotoEdit">${st.photo?avatar(st,'detailPhoto'):'<div class="photoPlaceholder">사진</div>'}<button class="secondary" data-act="photo" data-id="${st.id||''}" ${st.id?'':'disabled'}>${st.photo?'사진 변경':'사진 추가'}</button></div>
         <div class="formGrid"><label class="fieldLabel">이름 *<input id="fName" class="input" value="${attr(st.name||'')}"></label><label class="fieldLabel">학년<input id="fGrade" class="input" placeholder="예: 4학년" value="${attr(st.grade||'')}"></label></div>
         <div class="formGrid"><label class="fieldLabel">성별<select id="fGender" class="input"><option ${!st.gender||st.gender==='미지정'?'selected':''}>미지정</option><option ${st.gender==='남'?'selected':''}>남</option><option ${st.gender==='여'?'selected':''}>여</option></select></label><label class="fieldLabel">생일<input id="fBirthday" class="input" type="date" value="${attr(st.birthday||'')}"></label></div>
-        <label class="fieldLabel">담당교사<input id="fAssignedTeacher" class="input" value="${attr(st.assignedTeacher||'')}"></label>
-        <div class="formGrid"><label class="fieldLabel">부모 신앙<select id="fParentFaith" class="input"><option ${st.parentFaith==='미기재'?'selected':''}>미기재</option><option ${st.parentFaith==='신자'?'selected':''}>신자</option><option ${st.parentFaith==='비신자'?'selected':''}>비신자</option></select></label><label class="fieldLabel">다문화<select id="fMulticultural" class="input"><option value="no" ${!st.multicultural?'selected':''}>미체크</option><option value="yes" ${st.multicultural?'selected':''}>다문화</option></select></label></div>
-        <label class="fieldLabel">기타 분류<input id="fTags" class="input" placeholder="쉼표로 구분" value="${attr((st.tags||[]).join(', '))}"></label>
+        <label class="fieldLabel">담당교사<select id="fAssignedTeacher" class="input">${v14TeacherSelectOptions(st.assignedTeacher||'')}</select></label>
+        ${care?`<div class="sectionMiniTitle">비교 정보</div>
+        <label class="fieldLabel">부모 신앙<select id="fParentFaith" class="input">${v14ParentFaithSelectOptions(st.parentFaith||'미기재')}</select></label>
+        <label class="checkLine compareCheck"><input id="fMulticultural" type="checkbox" ${st.multicultural?'checked':''}><span>다문화 가정</span></label>
+        <label class="checkLine compareCheck"><input id="fOtherDeptSibling" type="checkbox" ${st.otherDeptSibling?'checked':''}><span>우리 교회 다른 부서에 형제·자매 있음</span></label>
+        <input id="fOtherDeptSiblingNote" class="input" placeholder="형제·자매 이름 · 관계 · 부서 (예: 김민수 · 형 · 중등부)" value="${attr(st.otherDeptSiblingNote||'')}">
+        <label class="fieldLabel">기타 메모용 분류<input id="fTags" class="input" placeholder="필요한 경우 쉼표로 구분" value="${attr((st.tags||[]).join(', '))}"></label>
         <div class="sectionMiniTitle">연락처</div><label class="fieldLabel">학생 전화<input id="fPhone" class="input" value="${attr(st.phone||'')}"></label>
         <div class="formGrid"><input id="fParentName" class="input" placeholder="보호자 1 이름" value="${attr(st.parentName||'')}"><input id="fParentRelation" class="input" placeholder="관계" value="${attr(st.parentRelation||'')}"></div><input id="fParentPhone" class="input" placeholder="보호자 1 전화" value="${attr(st.parentPhone||'')}">
         <div class="formGrid"><input id="fParent2Name" class="input" placeholder="보호자 2 이름" value="${attr(st.parent2Name||'')}"><input id="fParent2Relation" class="input" placeholder="관계" value="${attr(st.parent2Relation||'')}"></div><input id="fParent2Phone" class="input" placeholder="보호자 2 전화" value="${attr(st.parent2Phone||'')}">
         <label class="fieldLabel">기타 가족·친척 연락처<textarea id="fExtraContacts" class="input textarea" placeholder="이름|관계|전화번호">${esc(extras)}</textarea></label>
-        <div class="sectionMiniTitle">추가 정보</div><input id="fSchool" class="input" placeholder="학교" value="${attr(st.school||'')}"><input id="fSiblings" class="input" placeholder="형제관계" value="${attr(st.siblings||'')}"><input id="fAddress" class="input" placeholder="주소" value="${attr(st.address||'')}"><textarea id="fMemo" class="input textarea" placeholder="학생 기본 메모">${esc(st.memo||'')}</textarea>
+        <div class="sectionMiniTitle">추가 정보</div><input id="fSchool" class="input" placeholder="학교" value="${attr(st.school||'')}"><input id="fSiblings" class="input" placeholder="형제관계" value="${attr(st.siblings||'')}"><input id="fAddress" class="input" placeholder="주소" value="${attr(st.address||'')}"><textarea id="fMemo" class="input textarea" placeholder="학생 기본 메모">${esc(st.memo||'')}</textarea>`:`<div class="notice">청년교사용에서는 이름 · 학년 · 성별 · 담당교사만 등록합니다. 보호자·주소·비교 정보는 표시하지 않습니다.</div>`}
         <button class="primary fullBtn" data-act="saveStudent" data-id="${st.id||''}">${ui.modal.id?'변경사항 저장':'학생 추가'}</button>
         ${ui.modal.id?`<div class="dangerZone"><strong>명단 관리</strong><button class="secondary fullBtn" data-act="deactivateStudent" data-id="${st.id}">명단에서 제외</button><button class="danger fullBtn" data-act="deleteStudentHard" data-id="${st.id}">학생 완전 삭제</button></div>`:''}</div>`);
     }

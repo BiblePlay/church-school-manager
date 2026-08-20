@@ -143,7 +143,7 @@
     const totalMarked=baseList.reduce((n,st)=>n+studentAnalytics(st,dates).checked,0);
     const totalAtt=baseList.reduce((n,st)=>n+studentAnalytics(st,dates).attended,0);
     const focus=baseList.filter(st=>{const a=studentAnalytics(st,dates);return a.currentAbs>=2||(a.checked>=3&&a.attended/a.checked<=0.5);});
-    return `${state.settings.adminMode?'<div class="recordsModeRow"><button class="dashLaunch" data-act="openDashboard">▣ 부서 현황</button></div>':''}
+    return `${state.settings.adminMode?`<div class="recordsModeRow ${state.settings.profileAccess==='youth'?'single':''}"><button class="dashLaunch" data-act="openDashboard">▣ 부서 현황</button>${state.settings.profileAccess!=='youth'?'<button class="studentAnalysisLaunch" data-act="openStudentAnalysis">◉ 학생 분석</button>':''}</div>`:''}
       <div class="chips recordRangeChips">${['이번 달','지난 달','최근 3개월','최근 6개월','전체'].map(v=>`<button class="chip ${ui.analyticsRange===v?'active':''}" data-record-range="${v}">${v}</button>`).join('')}</div>
       ${scopeChoiceHtml('records',scope,true)}
       <section class="hero"><div class="heroGrid"><div><div class="big">${totalMarked?Math.round(totalAtt/totalMarked*100):0}<span>%</span></div><div class="heroLabel">기록된 출석 기준</div></div><div class="heroRight"><strong>${focus.length}명</strong><div class="heroLabel">최근 집중 확인</div></div></div></section>
