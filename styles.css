@@ -432,6 +432,12 @@ html[data-theme="dark"] .dashboardIntro{background:#ffd21f!important;color:#111!
 html[data-theme="dark"] .dashboardIntroIcon{background:#fff!important}
 html[data-theme="dark"] .noContact{color:var(--muted)!important}
 
+/* iOS Safari name-color fix — keep names on the app's text color instead of the native button/link color. */
+.studentName{
+  color:var(--ink)!important;
+  -webkit-text-fill-color:var(--ink)!important;
+}
+
 /* v1.5.2.8 — readability only: larger student names in Talent and Attendance.
    Teacher names, People/Student management, row geometry and controls are unchanged. */
 .studentRow[data-selectstudent] .studentName,
