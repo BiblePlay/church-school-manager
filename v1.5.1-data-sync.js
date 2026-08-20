@@ -171,12 +171,12 @@
   }
   function baseStudentForYouth(st){return {id:st.id,name:st.name,grade:st.grade||'',gender:st.gender||'',teams:safeArray(st.teams),assignedTeacher:st.assignedTeacher||'',active:true};}
   function distributionRevision(){
-    const core={students:active().map(s=>({id:s.id,name:s.name,grade:s.grade,birthday:s.birthday,phone:s.phone,parentPhone:s.parentPhone,parent2Phone:s.parent2Phone,address:s.address,teams:s.teams,assignedTeacher:s.assignedTeacher,parentFaith:s.parentFaith,multicultural:!!s.multicultural,otherDeptSibling:!!s.otherDeptSibling,otherDeptSiblingNote:s.otherDeptSiblingNote||'',siblings:s.siblings||''})),teachers:activeTeachers().map(t=>({id:t.id,name:t.name,role:t.role,phone:t.phone,birthday:t.birthday})),teams:state.teams};
+    const core={students:active().map(s=>({id:s.id,name:s.name,grade:s.grade,birthday:s.birthday,phone:s.phone,parentPhone:s.parentPhone,parent2Phone:s.parent2Phone,address:s.address,teams:s.teams,assignedTeacher:s.assignedTeacher,parentFaith:s.parentFaith,multicultural:!!s.multicultural,otherDeptSibling:!!s.otherDeptSibling,otherDeptSiblingNote:s.otherDeptSiblingNote||'',siblings:s.siblings||''})),teachers:activeTeachers().map(t=>({id:t.id,name:t.name,role:t.role,phone:t.phone,birthday:t.birthday})),teams:state.teams,gradeHomeroomTeachers:state.settings.gradeHomeroomTeachers||{},teamAssignedTeachers:state.settings.teamAssignedTeachers||{}};
     return fnv1a(JSON.stringify(core));
   }
   v14DistributionPacket=function(kind){
     ensureCustomOrder(); const care=kind==='care'; const revision=distributionRevision();
-    return {schema:'church-school-base-v3',packetType:care?'care-admin':'youth-basic',dataRevision:revision,createdAt:new Date().toISOString(),department:state.settings.department||'',students:active().map(st=>care?baseStudentForCare(st):baseStudentForYouth(st)),teachers:activeTeachers().map(t=>{const x=clone(t);delete x.leaveHistory;return x;}),teams:clone(state.teams||[]),settings:{amounts:clone(state.settings.amounts||[]),longAbsenceDays:Number(state.settings.longAbsenceDays||60),customStudentOrder:clone(state.settings.customStudentOrder||[])},privacy:care?'학생 상세정보·심방/연락 기록 포함 · 출석/달란트 이력 제외':'학생 상세 개인정보·심방/내부 메모 제외 · 교사 연락처 포함'};
+    return {schema:'church-school-base-v3',packetType:care?'care-admin':'youth-basic',dataRevision:revision,createdAt:new Date().toISOString(),department:state.settings.department||'',students:active().map(st=>care?baseStudentForCare(st):baseStudentForYouth(st)),teachers:activeTeachers().map(t=>{const x=clone(t);delete x.leaveHistory;return x;}),teams:clone(state.teams||[]),settings:{amounts:clone(state.settings.amounts||[]),longAbsenceDays:Number(state.settings.longAbsenceDays||60),customStudentOrder:clone(state.settings.customStudentOrder||[]),gradeHomeroomTeachers:clone(state.settings.gradeHomeroomTeachers||{}),teamAssignedTeachers:clone(state.settings.teamAssignedTeachers||{})},privacy:care?'학생 상세정보·심방/연락 기록 포함 · 출석/달란트 이력 제외':'학생 상세 개인정보·심방/내부 메모 제외 · 교사 연락처 포함'};
   };
   v14ExportPack=function(kind){
     const p=v14DistributionPacket(kind), label=kind==='care'?'임원_양육교사용':'청년교사용';
@@ -286,6 +286,8 @@
     }
     if(p.settings?.amounts)state.settings.amounts=clone(p.settings.amounts);
     if(p.settings?.longAbsenceDays)state.settings.longAbsenceDays=Number(p.settings.longAbsenceDays);
+    if(p.settings?.gradeHomeroomTeachers&&typeof p.settings.gradeHomeroomTeachers==='object')state.settings.gradeHomeroomTeachers=clone(p.settings.gradeHomeroomTeachers);
+    if(p.settings?.teamAssignedTeachers&&typeof p.settings.teamAssignedTeachers==='object')state.settings.teamAssignedTeachers=clone(p.settings.teamAssignedTeachers);
     state.settings.lastBaseDataRevision=p.dataRevision||'';
     if(replace)state.settings.profileAccess=care?'care':'youth';
     save();

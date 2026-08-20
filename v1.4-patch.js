@@ -50,6 +50,7 @@ state.teachers.forEach(v14EnsureTeacher);
 state.importedTextIds = Array.isArray(state.importedTextIds)?state.importedTextIds:[];
 state.settings.basePacketVersion = Number(state.settings.basePacketVersion||1);
 state.settings.gradeHomeroomTeachers = (state.settings.gradeHomeroomTeachers && typeof state.settings.gradeHomeroomTeachers==='object') ? state.settings.gradeHomeroomTeachers : {};
+state.settings.teamAssignedTeachers = (state.settings.teamAssignedTeachers && typeof state.settings.teamAssignedTeachers==='object') ? state.settings.teamAssignedTeachers : {};
 function v14GradeHomeroomTeachers(grade){
   const g=normalizeGrade(grade||'');
   const raw=state.settings.gradeHomeroomTeachers?.[g];
@@ -234,6 +235,19 @@ function v14DonutStyle(rows,total){
   if(cursor<100)parts.push(`#ece9e2 ${cursor.toFixed(3)}% 100%`);
   return `background:conic-gradient(${parts.join(',')})`;
 }
+function v14DonutLabels(rows,missing,total){
+  if(!total)return '';
+  const slices=[...rows.map(r=>({count:r.count,color:r.color,label:r.label})),...(missing?[{count:missing,color:'#ece9e2',label:'미분류'}]:[])];
+  let cursor=0,out='';
+  for(const r of slices){
+    const start=cursor,next=cursor+(r.count/total*100);cursor=next;
+    if(!r.count)continue;
+    const mid=(start+next)/2,rad=(mid*3.6-90)*Math.PI/180,radius=39;
+    const x=50+Math.cos(rad)*radius,y=50+Math.sin(rad)*radius,pct=Math.round(r.count/total*100);
+    out+=`<span class="analysisDonutLabel" style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%;--analysis-label-color:${r.color}"><b>${r.count}명</b><em>${pct}%</em></span>`;
+  }
+  return out;
+}
 function v14StudentAnalysisHtml(){
   const scope=v14AnalysisScopeOptions().includes(ui.studentAnalysisScope)?ui.studentAnalysisScope:'전체';
   ui.studentAnalysisScope=scope;
@@ -245,7 +259,7 @@ function v14StudentAnalysisHtml(){
   return `<div class="studentAnalysisIntro"><strong>${esc(scope)} 학생 구성</strong><small>임원·양육교사용 내부 현황입니다. 학생 상세의 비교 정보가 바로 반영됩니다.</small></div>
     <div class="analysisScopeChips">${v14AnalysisScopeOptions().map(v=>`<button class="chip ${scope===v?'active':''}" data-act="setStudentAnalysisScope" data-analysis-scope="${attr(v)}">${esc(v)}</button>`).join('')}</div>
     <div class="analysisCategoryTabs">${cats.map(([k,l])=>`<button class="${category===k?'active':''}" data-act="setStudentAnalysisCategory" data-analysis-category="${k}">${l}</button>`).join('')}</div>
-    <section class="analysisChartCard"><div class="analysisChartHead"><div><strong>${esc(d.spec.title)}</strong><small>${esc(d.spec.subtitle)}</small></div><span>${d.list.length}명</span></div><div class="analysisDonutWrap"><div class="analysisDonut" style="${v14DonutStyle(d.rows,denom)}"><div><strong>${d.list.length}</strong><small>전체 학생</small></div></div></div>${d.missing?`<div class="analysisMissing">미분류 ${d.missing}명 · 회색 영역입니다. 학생 상세에서 값을 선택하면 비율에 반영됩니다.</div>`:''}<div class="analysisLegend">${rows}</div></section>`;
+    <section class="analysisChartCard"><div class="analysisChartHead"><div><strong>${esc(d.spec.title)}</strong><small>${esc(d.spec.subtitle)}</small></div><span>${d.list.length}명</span></div><div class="analysisDonutWrap"><div class="analysisDonut" style="${v14DonutStyle(d.rows,denom)}">${v14DonutLabels(d.rows,d.missing,denom)}<div><strong>${d.list.length}</strong><small>전체 학생</small></div></div></div>${d.missing?`<div class="analysisMissing">미분류 ${d.missing}명 · 회색 영역입니다. 학생 상세에서 값을 선택하면 비율에 반영됩니다.</div>`:''}<div class="analysisLegend">${rows}</div></section>`;
 }
 function v14AnalysisGroupStudents(category,key,scope){
   const d=v14AnalysisData(category,scope),g=d.rows.find(x=>x.key===key);

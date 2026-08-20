@@ -593,3 +593,12 @@ html[data-theme="dark"] .sdSummary,
 html[data-theme="dark"] .compareCheckCard,
 html[data-theme="dark"] .compareOption span{background:#20201e!important;color:#f5f2ea!important;border-color:#4a4944!important}
 html[data-theme="dark"] .compareHelp{background:#30302d!important;color:#c9c5ba!important}
+
+/* v1.5.3.24 — final mobile data labels */
+.analysisDonutLabel{position:absolute;z-index:3;transform:translate(-50%,-50%);display:grid;place-items:center;min-width:42px;padding:4px 6px;border:1.5px solid var(--analysis-label-color,#d8d3c9);border-radius:10px;background:rgba(255,255,255,.94);box-shadow:0 2px 7px rgba(0,0,0,.08);pointer-events:none;line-height:1.05}
+.analysisDonutLabel b{font-size:10px;font-weight:950;color:#171612;white-space:nowrap}
+.analysisDonutLabel em{font-size:9px;font-weight:850;font-style:normal;color:#67635b;white-space:nowrap}
+@media(max-width:365px){.analysisDonutLabel{min-width:38px;padding:3px 5px}.analysisDonutLabel b{font-size:9px}.analysisDonutLabel em{font-size:8px}}
+html[data-theme="dark"] .analysisDonutLabel{background:rgba(32,32,30,.96);box-shadow:0 2px 7px rgba(0,0,0,.3)}
+html[data-theme="dark"] .analysisDonutLabel b{color:#f5f2ea}
+html[data-theme="dark"] .analysisDonutLabel em{color:#c9c5ba}

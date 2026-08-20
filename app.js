@@ -1,4 +1,4 @@
-const APP_VERSION = '1.5.3.23';
+const APP_VERSION = '1.5.3.24';
 const STORAGE_KEY = 'church-school-mobile-v4'; // v0.4 데이터 그대로 이어서 사용
 
 const sampleStudents = [];
@@ -24,6 +24,8 @@ const defaultState = {
     customStudentOrder:[],
     managedGrades:[],
     managedTeams:[],
+    gradeHomeroomTeachers:{},
+    teamAssignedTeachers:{},
     adminMode:true,
     profileAccess:'care'
   },
@@ -78,6 +80,8 @@ function migrate(x){
   s.settings.customStudentOrder = Array.isArray(s.settings.customStudentOrder)?s.settings.customStudentOrder:[];
   s.settings.managedGrades = Array.isArray(s.settings.managedGrades)?s.settings.managedGrades:[];
   s.settings.managedTeams = Array.isArray(s.settings.managedTeams)?s.settings.managedTeams:[];
+  s.settings.gradeHomeroomTeachers = (s.settings.gradeHomeroomTeachers&&typeof s.settings.gradeHomeroomTeachers==='object'&&!Array.isArray(s.settings.gradeHomeroomTeachers))?s.settings.gradeHomeroomTeachers:{};
+  s.settings.teamAssignedTeachers = (s.settings.teamAssignedTeachers&&typeof s.settings.teamAssignedTeachers==='object'&&!Array.isArray(s.settings.teamAssignedTeachers))?s.settings.teamAssignedTeachers:{};
   if(typeof s.settings.adminMode!=='boolean') s.settings.adminMode=true;
   if(!['care','youth'].includes(s.settings.profileAccess))s.settings.profileAccess='care';
   s.students.forEach(st=>{ st.teams=Array.isArray(st.teams)?st.teams:[]; st.grade=st.grade||''; st.parentRelation=st.parentRelation||''; st.parent2Name=st.parent2Name||''; st.parent2Relation=st.parent2Relation||''; st.parent2Phone=st.parent2Phone||''; st.longTermManual=!!st.longTermManual; if(st.otherDeptSibling===undefined)st.otherDeptSibling=false; st.otherDeptSiblingNote=st.otherDeptSiblingNote||''; if(st.active===undefined)st.active=true; });
@@ -648,6 +652,10 @@ function handleAct(act,b){
   if(act==='resetAll')return resetData('all');
   if(act==='backup')return backup();
   if(act==='setBackupFolder')return setBackupFolder();
+  if(act==='openFileVault')return openFileVault();
+  if(act==='vaultDownload')return vaultDownload(b.dataset.vaultId);
+  if(act==='vaultImport')return vaultImport(b.dataset.vaultId);
+  if(act==='vaultDelete')return vaultDelete(b.dataset.vaultId);
   if(act==='backupImport'){document.getElementById('backupImport').click();return;}
   if(act==='exportStudents')return exportWorkbook('students');
   if(act==='exportAttendance')return exportWorkbook('attendance');
@@ -815,16 +823,17 @@ function saveStudentForm(id){
 function deactivateStudent(id){ if(!confirm('현재 명단에서 숨길까요? 과거 출석·달란트 기록은 유지됩니다.'))return; pushUndo();studentById(id).active=false;save();ui.modal=null;render(); }
 
 function newTeam(){ const n=prompt('새 팀 이름을 입력하세요.'); if(!n?.trim())return; const name=n.trim(); if(allTeams().includes(name))return toast('이미 있는 팀 이름입니다.'); pushUndo(); state.teams.push(name); save(); ui.teamGrade='전체'; ui.modal={type:'teamEdit',team:name}; render(); }
-function renameTeam(old){ const el=document.getElementById('teamRename'); const n=el?.value.trim(); if(!n||n===old)return; if(allTeams().includes(n))return toast('이미 있는 팀 이름입니다.'); pushUndo(); const i=state.teams.indexOf(old); if(i>=0)state.teams[i]=n; active().forEach(s=>{s.teams=(s.teams||[]).map(t=>t===old?n:t)}); save(); ui.modal={type:'teamEdit',team:n}; toast('팀 이름을 바꿨습니다.'); render(); }
+function renameTeam(old){ const el=document.getElementById('teamRename'); const n=el?.value.trim(); if(!n||n===old)return; if(allTeams().includes(n))return toast('이미 있는 팀 이름입니다.'); pushUndo(); const i=state.teams.indexOf(old); if(i>=0)state.teams[i]=n; active().forEach(s=>{s.teams=(s.teams||[]).map(t=>t===old?n:t)}); const tm=state.settings.teamAssignedTeachers||{}; if(Object.prototype.hasOwnProperty.call(tm,old)){tm[n]=tm[old];delete tm[old];state.settings.teamAssignedTeachers=tm;} save(); ui.modal={type:'teamEdit',team:n}; toast('팀 이름을 바꿨습니다.'); render(); }
 function toggleTeamMember(id,team){ pushUndo(); const st=studentById(id); st.teams ||= []; const i=st.teams.indexOf(team); if(i>=0)st.teams.splice(i,1); else st.teams.push(team); save(); render(); }
 function clearTeam(team){ if(!confirm(`${team}의 팀원을 모두 뺄까요? 과거 달란트 기록은 유지됩니다.`))return; pushUndo();active().forEach(s=>s.teams=(s.teams||[]).filter(t=>t!==team));save();render(); }
-function deleteTeam(team){ if(!confirm(`${team}을 삭제할까요? 과거 기록은 유지됩니다.`))return; pushUndo();state.teams=state.teams.filter(t=>t!==team);active().forEach(s=>s.teams=(s.teams||[]).filter(t=>t!==team));save();render(); }
+function deleteTeam(team){ if(!confirm(`${team}을 삭제할까요? 과거 기록은 유지됩니다.`))return; pushUndo();state.teams=state.teams.filter(t=>t!==team);active().forEach(s=>s.teams=(s.teams||[]).filter(t=>t!==team));if(state.settings.teamAssignedTeachers)delete state.settings.teamAssignedTeachers[team];save();render(); }
 function moveTeam(team,dir){ const arr=state.teams; const i=arr.indexOf(team); const j=i+dir; if(i<0||j<0||j>=arr.length)return; pushUndo(); [arr[i],arr[j]]=[arr[j],arr[i]]; save(); render(); }
 
 function renameGrade(old){
   const n=prompt(`${old}의 새 이름을 입력하세요.`,old); if(!n?.trim())return; const next=normalizeGrade(n.trim()); if(next===old)return;
   if(grades().includes(next)) return mergeGrade(old,next);
   createSnapshot('학년 이름 변경 전'); pushUndo(); state.students.forEach(st=>{if(st.active!==false&&st.grade===old)st.grade=next;});
+  const gm=state.settings.gradeHomeroomTeachers||{};if(Object.prototype.hasOwnProperty.call(gm,old)){gm[next]=gm[old];delete gm[old];state.settings.gradeHomeroomTeachers=gm;}
   if(state.settings.managementScope===old)state.settings.managementScope=next; if(ui.studentGrade===old)ui.studentGrade=next; if(ui.attendanceGrade===old)ui.attendanceGrade=next; if(ui.analyticsScope===old)ui.analyticsScope=next;
   save();toast('학년 이름을 변경했습니다.');ui.modal={type:'gradeManager'};render();
 }
@@ -833,12 +842,13 @@ function mergeGrade(old,targetArg){
   const target=targetArg||prompt(`${old}을 어느 학년으로 병합할까요?\n${options.join(' / ')}`,options[0]); if(!target)return; const next=options.find(x=>x===target.trim())||options.find(x=>normalizeGrade(x)===normalizeGrade(target)); if(!next)return toast('목록에 있는 학년 이름을 입력해 주세요.');
   if(!confirm(`${old} 학생을 모두 ${next}으로 이동할까요?\n과거 기록은 그대로 유지됩니다.`))return;
   createSnapshot('학년 병합 전');pushUndo();state.students.forEach(st=>{if(st.active!==false&&st.grade===old)st.grade=next;});
+  const gm=state.settings.gradeHomeroomTeachers||{},merged=[...new Set([...(gm[next]||[]),...(gm[old]||[])])].slice(0,2);if(merged.length)gm[next]=merged;delete gm[old];state.settings.gradeHomeroomTeachers=gm;if(merged.length&&typeof v14SetAssignedTeachers==='function')active().filter(st=>st.grade===next).forEach(st=>v14SetAssignedTeachers(st,merged));
   if(state.settings.managementScope===old)state.settings.managementScope=next; [ui.studentGrade,ui.attendanceGrade,ui.analyticsScope].forEach(()=>{}); if(ui.studentGrade===old)ui.studentGrade=next;if(ui.attendanceGrade===old)ui.attendanceGrade=next;if(ui.analyticsScope===old)ui.analyticsScope=next;
   save();toast(`${old} → ${next} 병합 완료`);ui.modal={type:'gradeManager'};render();
 }
 function deleteGrade(g){
   const n=active().filter(st=>st.grade===g).length; if(!confirm(`${g} 분류를 삭제할까요?\n${n}명의 학생은 '학년 미지정'으로 남고 과거 기록은 유지됩니다.`))return;
-  createSnapshot('학년 분류 삭제 전');pushUndo();state.students.forEach(st=>{if(st.active!==false&&st.grade===g)st.grade='';});if(state.settings.managementScope===g)state.settings.managementScope='전체';if(ui.studentGrade===g)ui.studentGrade='전체';if(ui.attendanceGrade===g)ui.attendanceGrade='전체';if(ui.analyticsScope===g)ui.analyticsScope='전체';save();toast('학년 분류를 정리했습니다.');ui.modal={type:'gradeManager'};render();
+  createSnapshot('학년 분류 삭제 전');pushUndo();state.students.forEach(st=>{if(st.active!==false&&st.grade===g)st.grade='';});if(state.settings.gradeHomeroomTeachers)delete state.settings.gradeHomeroomTeachers[g];if(state.settings.managementScope===g)state.settings.managementScope='전체';if(ui.studentGrade===g)ui.studentGrade='전체';if(ui.attendanceGrade===g)ui.attendanceGrade='전체';if(ui.analyticsScope===g)ui.analyticsScope='전체';save();toast('학년 분류를 정리했습니다.');ui.modal={type:'gradeManager'};render();
 }
 function saveSettings(){
   const dep=document.getElementById('department').value.trim(); let scope=document.getElementById('managementScope').value; const nums=document.getElementById('amounts').value.split(',').map(v=>Number(v.trim())).filter(v=>Number.isFinite(v)&&v>0).slice(0,4);
@@ -910,7 +920,7 @@ function deleteSessionRecord(k){
 async function shareSummary(){ const list=scopedStudents(ui.attendanceGrade==='전체'?(state.settings.managementScope||'전체'):ui.attendanceGrade).filter(s=>!longAbsenceInfo(s).long); const c=attendanceCounts(list); const lines=[`${displayDate()} · ${state.settings.department||'교회학교'}`,`출석 ${c.present}/${list.length} · 결석 ${c.absent} · 지각 ${c.late}`,`달란트 총 ${fmt(sessionTotal())}`]; const gradesList=grades(); gradesList.forEach(g=>{const ss=active().filter(s=>s.grade===g&&!longAbsenceInfo(s).long); if(ss.length){const cc=attendanceCounts(ss); const talent=ss.reduce((n,s)=>n+todayAmt(s.id),0); lines.push(`${g} ${cc.present}/${ss.length} · ${fmt(talent)}달란트`);}}); await nativeShare({title:'오늘 요약',text:lines.join('\n')});ui.modal=null;render(); }
 async function shareLast(){ const tx=ensureSession().transactions.find(t=>t.id===ui.lastTxId);if(!tx)return;const names=tx.studentIds.map(id=>studentById(id)?.name).filter(Boolean);if(tx.kind==='reset'){const lines=[`${displayDate()} 달란트 리셋`,...names.map(n=>`${n} · 잔액 0으로 리셋`),`총 ${names.length}명`];return nativeShare({title:'달란트 리셋',text:lines.join('\n')});}const lines=[`${displayDate()} 달란트 ${tx.amount<0?'차감':'지급'}`,...names.map(n=>`${n} ${tx.amount>0?'+':''}${tx.amount}`),`${tx.multiplier===2?`기본 ${tx.base} ×2 · `:''}총 ${fmt(tx.amount*names.length)}달란트`];await nativeShare({title:'달란트 기록',text:lines.join('\n')}); }
 function studentPacketInfo(st){return {id:st.id,name:st.name,grade:st.grade||'',birthday:st.birthday||'',gender:st.gender||'',teams:clone(st.teams||[])};}
-async function sharePacket(packet,name,text){ const file=new File([JSON.stringify(packet,null,2)],name,{type:'application/json'}); const shared=await nativeShare({title:name,text,files:[file]}); if(!shared)download(name,JSON.stringify(packet,null,2),'application/json'); }
+async function sharePacket(packet,name,text){ const data=JSON.stringify(packet,null,2),file=new File([data],name,{type:'application/json'}); const folderSaved=await exportRecordFile(name,data,'application/json',{promptFolder:false,downloadFallback:false,archive:true}); const shared=await nativeShare({title:name,text,files:[file]}); if(!shared&&!folderSaved)rawDownload(name,data,'application/json'); }
 async function shareAttendancePacket(){ const list=attendanceScopeList(),records=state.sessions?.[ui.date]?.attendance||{},recorded=list.filter(s=>Object.prototype.hasOwnProperty.call(records,s.id)); const p={schema:'church-school-share-v2',packetId:uid('packet'),type:'attendance',date:ui.date,scope:{kind:'grade',label:ui.attendanceGrade,grades:[...new Set(recorded.map(s=>s.grade).filter(Boolean))]},createdAt:new Date().toISOString(),students:recorded.map(studentPacketInfo),records:recorded.map(s=>({studentId:s.id,present:att(s).present,late:att(s).late,newcomer:att(s).newcomer,status:att(s).present?'present':'absent',memo:att(s).memo||''}))}; await sharePacket(p,`${ui.date}_${ui.attendanceGrade}_출석.json`,`${displayDate()} ${ui.attendanceGrade} 출석 기록`);ui.modal=null;render(); }
 async function shareTalentPacket(){ const tx=ensureSession().transactions; const visible=filterStudents(); const ids=[...new Set(tx.flatMap(t=>t.studentIds||[]))]; const p={schema:'church-school-share-v2',packetId:uid('packet'),type:'talent',date:ui.date,scope:{kind:ui.filterType,label:ui.filterValue,grades:[...new Set(visible.map(s=>s.grade).filter(Boolean))],teams:[...new Set(visible.flatMap(s=>s.teams||[]))]},createdAt:new Date().toISOString(),students:ids.map(studentById).filter(Boolean).map(studentPacketInfo),records:clone(tx)}; await sharePacket(p,`${ui.date}_달란트.json`,`${displayDate()} 달란트 ${fmt(sessionTotal())}`);ui.modal=null;render(); }
 async function shareTeacherAttendance(){ const list=activeTeachers();const c=teacherAttendanceCounts(list);const text=[`${displayDate()} 교사 출석`,`출석 ${c.present}/${list.length} · 지각 ${c.late} · 결석 ${c.absent}`,...list.filter(t=>teacherAtt(t).status!=='unset').map(t=>`${t.name} ${teacherStatusLabel(teacherAtt(t).status)}${teacherAtt(t).reason?` · ${teacherAtt(t).reason}`:''}`)].join('\n');const p={schema:'church-school-share-v2',packetId:uid('packet'),type:'teacher-attendance',date:ui.date,createdAt:new Date().toISOString(),teachers:list.map(t=>({id:t.id,name:t.name,role:t.role||''})),records:list.map(t=>({teacherId:t.id,present:teacherAtt(t).present,late:teacherAtt(t).late,status:teacherAtt(t).present?'present':'absent',reason:teacherAtt(t).reason||''}))};await sharePacket(p,`${ui.date}_교사출석.json`,text);ui.modal=null;render(); }
@@ -939,17 +949,35 @@ function confirmMerge(){
   save();pendingMerge=null;ui.modal=null;toast(`업데이트 · 출석 ${attN} · 달란트 ${txN} · 교사 ${teacherN}${added?` · 새 학생 ${added}`:''}`);render();
 }
 
-const BACKUP_FOLDER_NAME='교회학교 출석달란트 백업';
-const BACKUP_HANDLE_DB='church-school-backup-handle-v1';
-function backupHandleDb(){return new Promise((resolve,reject)=>{const req=indexedDB.open(BACKUP_HANDLE_DB,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('handles'))req.result.createObjectStore('handles');};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-async function backupHandleGet(){const db=await backupHandleDb();return new Promise((resolve,reject)=>{const tx=db.transaction('handles','readonly'),r=tx.objectStore('handles').get('directory');r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error);tx.oncomplete=()=>db.close();});}
-async function backupHandleSet(handle){const db=await backupHandleDb();return new Promise((resolve,reject)=>{const tx=db.transaction('handles','readwrite');tx.objectStore('handles').put(handle,'directory');tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>{db.close();reject(tx.error);};});}
-async function backupDirPermission(handle){try{const opt={mode:'readwrite'};if(await handle.queryPermission?.(opt)==='granted')return true;return await handle.requestPermission?.(opt)==='granted';}catch(_){return false;}}
-async function chooseBackupFolder(){if(!window.isSecureContext||!('showDirectoryPicker' in window))return null;const root=await window.showDirectoryPicker({id:'church-school-backup',mode:'readwrite',startIn:'downloads'});const dir=root.name===BACKUP_FOLDER_NAME?root:await root.getDirectoryHandle(BACKUP_FOLDER_NAME,{create:true});await backupHandleSet(dir);return dir;}
-async function getBackupFolder(promptIfMissing=true){if(!window.isSecureContext||!('showDirectoryPicker' in window))return null;try{const saved=await backupHandleGet();if(saved&&await backupDirPermission(saved))return saved;}catch(_){ }return promptIfMissing?chooseBackupFolder():null;}
+const RECORD_FOLDER_NAME='교회학교 출석달란트 자료';
+const RECORD_HANDLE_DB='church-school-record-folder-v1';
+const FILE_VAULT_DB='church-school-file-vault-v1';
+const RECORD_FOLDER_FLAG='church-school-record-folder-configured-v1';
+function recordHandleDb(){return new Promise((resolve,reject)=>{const req=indexedDB.open(RECORD_HANDLE_DB,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('handles'))req.result.createObjectStore('handles');};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
+async function recordHandleGet(){const db=await recordHandleDb();return new Promise((resolve,reject)=>{const tx=db.transaction('handles','readonly'),r=tx.objectStore('handles').get('directory');r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error);tx.oncomplete=()=>db.close();});}
+async function recordHandleSet(handle){const db=await recordHandleDb();return new Promise((resolve,reject)=>{const tx=db.transaction('handles','readwrite');tx.objectStore('handles').put(handle,'directory');tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>{db.close();reject(tx.error);};});}
+async function recordDirPermission(handle,request=false){try{const opt={mode:'readwrite'},q=await handle.queryPermission?.(opt);if(q==='granted')return true;if(request&&await handle.requestPermission?.(opt)==='granted')return true;return false;}catch(_){return false;}}
+async function chooseRecordFolder(){if(!window.isSecureContext||!('showDirectoryPicker' in window))return null;const root=await window.showDirectoryPicker({id:'church-school-records',mode:'readwrite',startIn:'downloads'});const dir=root.name===RECORD_FOLDER_NAME?root:await root.getDirectoryHandle(RECORD_FOLDER_NAME,{create:true});await recordHandleSet(dir);try{localStorage.setItem(RECORD_FOLDER_FLAG,'1');}catch(_){}return dir;}
+async function getRecordFolder(promptIfMissing=false){if(!window.isSecureContext||!('showDirectoryPicker' in window))return null;try{const saved=await recordHandleGet();if(saved&&await recordDirPermission(saved,true))return saved;}catch(_){ }return promptIfMissing?chooseRecordFolder():null;}
+function fileVaultDb(){return new Promise((resolve,reject)=>{const req=indexedDB.open(FILE_VAULT_DB,1);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
+async function archiveRecordFile(name,data,type){try{const db=await fileVaultDb(),item={id:`file-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,name:String(name||'기록'),type:type||'application/octet-stream',data:String(data??''),createdAt:new Date().toISOString()};await new Promise((resolve,reject)=>{const tx=db.transaction('files','readwrite');tx.objectStore('files').put(item);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});const all=await new Promise((resolve,reject)=>{const tx=db.transaction('files','readonly'),r=tx.objectStore('files').getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error);});if(all.length>80){const drop=all.sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt))).slice(0,all.length-80);await new Promise((resolve,reject)=>{const tx=db.transaction('files','readwrite');drop.forEach(x=>tx.objectStore('files').delete(x.id));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});}db.close();return item;}catch(e){console.warn('archive file failed',e);return null;}}
+async function listArchivedFiles(){try{const db=await fileVaultDb();const all=await new Promise((resolve,reject)=>{const tx=db.transaction('files','readonly'),r=tx.objectStore('files').getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error);});db.close();return all.sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));}catch(e){console.warn(e);return [];}}
+async function getArchivedFile(id){try{const db=await fileVaultDb();const item=await new Promise((resolve,reject)=>{const tx=db.transaction('files','readonly'),r=tx.objectStore('files').get(id);r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error);});db.close();return item;}catch(e){return null;}}
+async function deleteArchivedFile(id){try{const db=await fileVaultDb();await new Promise((resolve,reject)=>{const tx=db.transaction('files','readwrite');tx.objectStore('files').delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();return true;}catch(e){return false;}}
+function rawDownload(name,data,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;document.body.appendChild(a);a.click();const u=a.href;a.remove();setTimeout(()=>URL.revokeObjectURL(u),1200);}
+function isRecordFile(name,type){const n=String(name||'').toLowerCase();return n.endsWith('.json')||n.endsWith('.txt')||String(type||'').includes('json')||String(type||'').startsWith('text/plain');}
+async function writeRecordFolder(name,data,type,promptIfMissing=false){try{const dir=await getRecordFolder(promptIfMissing);if(!dir)return false;const fh=await dir.getFileHandle(name,{create:true}),w=await fh.createWritable();await w.write(new Blob([data],{type}));await w.close();return true;}catch(err){if(err?.name!=='AbortError')console.warn('record folder save failed',err);return false;}}
+async function exportRecordFile(name,data,type,{promptFolder=false,downloadFallback=true,archive=true}={}){let saved=false,firstPrompt=false;try{firstPrompt=promptFolder&&window.isSecureContext&&'showDirectoryPicker' in window&&localStorage.getItem(RECORD_FOLDER_FLAG)!=='1';}catch(_){firstPrompt=promptFolder&&window.isSecureContext&&'showDirectoryPicker' in window;}if(firstPrompt){try{const dir=await chooseRecordFolder();if(dir){const fh=await dir.getFileHandle(name,{create:true}),w=await fh.createWritable();await w.write(new Blob([data],{type}));await w.close();saved=true;}}catch(err){if(err?.name!=='AbortError')console.warn('first record folder save failed',err);}}if(!saved)saved=await writeRecordFolder(name,data,type,false);if(archive)await archiveRecordFile(name,data,type);if(!saved&&downloadFallback)rawDownload(name,data,type);if(promptFolder&&!saved){try{localStorage.removeItem(RECORD_FOLDER_FLAG);}catch(_){}}return saved;}
 function backupTimestamp(){const d=new Date();return `${todayKey()}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`;}
-async function backup(){const name=`교회학교_전체백업_${backupTimestamp()}.json`,data=JSON.stringify(state,null,2);if(window.isSecureContext&&'showDirectoryPicker' in window){try{const dir=await getBackupFolder(true);if(dir){const fh=await dir.getFileHandle(name,{create:true}),w=await fh.createWritable();await w.write(new Blob([data],{type:'application/json'}));await w.close();toast(`백업 완료 · ${BACKUP_FOLDER_NAME}`);return;}}catch(err){if(err?.name==='AbortError')return toast('백업 폴더 선택을 취소했습니다.');console.warn('backup folder save failed',err);toast('지정 폴더 저장에 실패해 기기 다운로드 위치로 저장합니다.');}}download(name,data,'application/json');toast('백업 완료 · 기기 다운로드 위치에 저장했습니다.');}
-async function setBackupFolder(){if(!window.isSecureContext||!('showDirectoryPicker' in window))return toast('이 기기에서는 백업 폴더 자동 지정이 지원되지 않아 기기 다운로드 위치를 사용합니다.');try{const dir=await chooseBackupFolder();if(dir)toast(`백업 폴더 지정 완료 · ${BACKUP_FOLDER_NAME}`);}catch(err){if(err?.name!=='AbortError'){console.warn(err);toast('백업 폴더를 지정하지 못했습니다.');}}}
+async function backup(){const name=`교회학교_전체백업_${backupTimestamp()}.json`,data=JSON.stringify(state,null,2);const saved=await exportRecordFile(name,data,'application/json',{promptFolder:true,downloadFallback:true,archive:true});toast(saved?`백업 완료 · ${RECORD_FOLDER_NAME}`:'백업 완료 · 앱 자료 보관함 + 기기 다운로드');}
+async function setBackupFolder(){if(!window.isSecureContext||!('showDirectoryPicker' in window))return toast('이 기기는 폴더 직접 지정 대신 앱 자료 보관함을 사용합니다. 필요한 파일은 보관함에서 다시 저장할 수 있습니다.');try{const dir=await chooseRecordFolder();if(dir)toast(`자료 폴더 지정 완료 · ${RECORD_FOLDER_NAME}`);}catch(err){if(err?.name!=='AbortError'){console.warn(err);toast('자료 폴더를 지정하지 못했습니다.');}}}
+async function openFileVault(){ui.fileVaultItems=await listArchivedFiles();ui.modal={type:'fileVault'};render();}
+async function vaultDownload(id){const item=await getArchivedFile(id);if(!item)return toast('파일을 찾지 못했습니다.');const saved=await writeRecordFolder(item.name,item.data,item.type,false);if(!saved)rawDownload(item.name,item.data,item.type);toast(saved?`자료 폴더에 저장했습니다. · ${item.name}`:`기기 다운로드로 저장했습니다. · ${item.name}`);}
+async function restoreBackupText(text){const x=migrate(JSON.parse(text));if(!x.students||!x.sessions)throw new Error('올바른 백업이 아닙니다.');if(!confirm('현재 데이터를 이 백업으로 교체할까요?'))return false;const before={id:uid('snap'),label:'전체 백업 복원 전',createdAt:new Date().toISOString(),data:snapshotPayload()};x.snapshots=[before,...(x.snapshots||[])].slice(0,5);state=x;save();location.reload();return true;}
+async function vaultImport(id){const item=await getArchivedFile(id);if(!item)return toast('파일을 찾지 못했습니다.');if(!String(item.name).toLowerCase().endsWith('.json'))return toast('TXT는 보관·다시 저장용입니다. 가져오기는 JSON 파일을 사용해 주세요.');try{const obj=JSON.parse(item.data),file=new File([item.data],item.name,{type:'application/json'});if(obj.schema==='church-school-attendance-bundle-v1'&&typeof analyzeAttendanceBundle==='function'){ui.attendanceBundlePreview={bundle:obj,summary:analyzeAttendanceBundle(obj)};ui.modal={type:'attendanceBundlePreview'};return render();}if(['church-school-base-v1','church-school-base-v2','church-school-base-v3'].includes(obj.schema))return importBaseDataFile(file);if(['church-school-share-v1','church-school-share-v2'].includes(obj.schema))return readShareFiles([file]);if(obj.students&&obj.sessions&&obj.settings)return restoreBackupText(item.data);return toast('이 JSON은 앱에서 바로 가져오는 형식이 아닙니다.');}catch(e){alert(`자료 가져오기에 실패했습니다.\n${e.message||e}`);}}
+async function vaultDelete(id){if(!confirm('앱 자료 보관함에서 이 파일을 삭제할까요? 기기 폴더에 저장된 파일은 삭제되지 않습니다.'))return;await deleteArchivedFile(id);return openFileVault();}
+function download(name,data,type){if(isRecordFile(name,type)){exportRecordFile(name,data,type,{promptFolder:true,downloadFallback:true,archive:true});return;}rawDownload(name,data,type);}
+
 function resetData(kind){
   const labels={students:'현재 학생 명단',teams:'팀',attendance:'출석 기록',talent:'달란트 기록',teachers:'교사 데이터',all:'전체 데이터'};
   const label=labels[kind]||'데이터';
@@ -957,7 +985,7 @@ function resetData(kind){
   if(kind==='all' && !confirm('전체 학생·출석·달란트·팀·교사 데이터가 초기화됩니다. 정말 진행할까요?'))return;
   createSnapshot(`${label} 초기화 전`);
   if(kind==='students') state.students.forEach(s=>s.active=false);
-  if(kind==='teams'){state.teams=[];state.students.forEach(s=>s.teams=[]);}
+  if(kind==='teams'){state.teams=[];state.students.forEach(s=>s.teams=[]);state.settings.teamAssignedTeachers={};}
   if(kind==='attendance'){Object.values(state.sessions).forEach(sess=>sess.attendance={});}
   if(kind==='talent'){Object.values(state.sessions).forEach(sess=>sess.transactions=[]);}
   if(kind==='teachers'){state.teachers=[];state.teacherSessions={};}
@@ -967,7 +995,6 @@ function resetData(kind){
   }
   save();ui.selected.clear();ui.modal={type:'dataManager'};toast(`${label}을 초기화했습니다.`);render();
 }
-function download(name,data,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;document.body.appendChild(a);a.click();const u=a.href;a.remove();setTimeout(()=>URL.revokeObjectURL(u),1200);}
 
 const aliases={name:['이름','성명','학생이름','name'],grade:['학년','grade'],gender:['성별','남여','성별남여'],birthday:['생일','생년월일','생년','birthday'],phone:['전화번호','학생전화번호','학생연락처','휴대폰','핸드폰'],parentName:['학부모성함','보호자성함','부모님성함','학부모','보호자'],parentPhone:['학부모연락처','보호자연락처','부모님연락처','학부모전화번호','보호자1연락처'],address:['주소','집주소'],school:['학교','학교명'],siblings:['형제관계','형제','자매관계'],memo:['기타','기재사항','비고','메모','특이사항']};
 function labelField(v){const n=normalize(v);for(const [k,arr] of Object.entries(aliases))if(arr.some(a=>normalize(a)===n))return k;return null;}
@@ -1198,7 +1225,7 @@ async function setupSW(){if(!('serviceWorker' in navigator)||location.protocol==
 
 document.getElementById('excelImport').addEventListener('change',e=>{const f=e.target.files[0];if(f)handleExcel(f);e.target.value='';});
 document.getElementById('teacherExcelImport').addEventListener('change',e=>{const f=e.target.files[0];if(f)handleTeacherExcel(f);e.target.value='';});
-document.getElementById('backupImport').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const x=migrate(JSON.parse(await f.text()));if(!x.students||!x.sessions)throw new Error('올바른 백업이 아닙니다.');if(confirm('현재 데이터를 이 백업으로 교체할까요?')){const before={id:uid('snap'),label:'전체 백업 복원 전',createdAt:new Date().toISOString(),data:snapshotPayload()};x.snapshots=[before,...(x.snapshots||[])].slice(0,5);state=x;save();location.reload();}}catch(err){alert(err.message);}e.target.value='';});
+document.getElementById('backupImport').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{await restoreBackupText(await f.text());}catch(err){alert(err.message);}e.target.value='';});
 document.getElementById('shareImport').addEventListener('change',e=>{if(e.target.files.length)readShareFiles([...e.target.files]);e.target.value='';});
 document.getElementById('baseDataImport').addEventListener('change',e=>{const f=e.target.files[0];if(f)importBaseDataFile(f);e.target.value='';});
 document.getElementById('photoImport').addEventListener('change',e=>{const f=e.target.files[0];if(!f||!ui.photoStudentId)return;const r=new FileReader();r.onload=()=>{const s=studentById(ui.photoStudentId);if(s){pushUndo();s.photo=r.result;save();ui.modal={type:'detail',id:s.id};render();}};r.readAsDataURL(f);e.target.value='';});
