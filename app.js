@@ -1,4 +1,4 @@
-const APP_VERSION = '1.5.3.25';
+const APP_VERSION = '1.5.3.27';
 const STORAGE_KEY = 'church-school-mobile-v4'; // v0.4 데이터 그대로 이어서 사용
 
 const sampleStudents = [];
@@ -976,7 +976,7 @@ async function vaultDownload(id){const item=await getArchivedFile(id);if(!item)r
 async function restoreBackupText(text){const x=migrate(JSON.parse(text));if(!x.students||!x.sessions)throw new Error('올바른 백업이 아닙니다.');if(!confirm('현재 데이터를 이 백업으로 교체할까요?'))return false;const before={id:uid('snap'),label:'전체 백업 복원 전',createdAt:new Date().toISOString(),data:snapshotPayload()};x.snapshots=[before,...(x.snapshots||[])].slice(0,5);state=x;save();location.reload();return true;}
 async function vaultImport(id){const item=await getArchivedFile(id);if(!item)return toast('파일을 찾지 못했습니다.');if(!String(item.name).toLowerCase().endsWith('.json'))return toast('TXT는 보관·다시 저장용입니다. 가져오기는 JSON 파일을 사용해 주세요.');try{const obj=JSON.parse(item.data),file=new File([item.data],item.name,{type:'application/json'});if(obj.schema==='church-school-attendance-bundle-v1'&&typeof analyzeAttendanceBundle==='function'){ui.attendanceBundlePreview={bundle:obj,summary:analyzeAttendanceBundle(obj)};ui.modal={type:'attendanceBundlePreview'};return render();}if(['church-school-base-v1','church-school-base-v2','church-school-base-v3'].includes(obj.schema))return importBaseDataFile(file);if(['church-school-share-v1','church-school-share-v2'].includes(obj.schema))return readShareFiles([file]);if(obj.students&&obj.sessions&&obj.settings)return restoreBackupText(item.data);return toast('이 JSON은 앱에서 바로 가져오는 형식이 아닙니다.');}catch(e){alert(`자료 가져오기에 실패했습니다.\n${e.message||e}`);}}
 async function vaultDelete(id){if(!confirm('앱 자료 보관함에서 이 파일을 삭제할까요? 기기 폴더에 저장된 파일은 삭제되지 않습니다.'))return;await deleteArchivedFile(id);return openFileVault();}
-function download(name,data,type){if(isRecordFile(name,type)){exportRecordFile(name,data,type,{promptFolder:true,downloadFallback:true,archive:true});return;}rawDownload(name,data,type);}
+function download(name,data,type){const n=String(name||'');if(n.includes('데이터팩')&&isRecordFile(name,type)){archiveRecordFile(name,data,type);rawDownload(name,data,type);return;}if(isRecordFile(name,type)){exportRecordFile(name,data,type,{promptFolder:true,downloadFallback:true,archive:true});return;}rawDownload(name,data,type);}
 
 function resetData(kind){
   const labels={students:'현재 학생 명단',teams:'팀',attendance:'출석 기록',talent:'달란트 기록',teachers:'교사 데이터',all:'전체 데이터'};
