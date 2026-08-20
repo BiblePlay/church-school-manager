@@ -121,7 +121,9 @@ function v14FilteredStudents(){
   }
   // 학년/팀은 각 화면의 '보기' 선택기가 단일 기준이다.
   // 예전 고급 필터의 grade/team 값이 남아 있어도 목록을 다시 잘라내지 않는다.
-  if(f.teacher!=='전체') arr=arr.filter(s=>v14AssignedTeacherNames(s).includes(f.teacher));
+  // 담당교사는 학생 상세/학년·팀 교사 지정 정보로만 유지하고 학생 필터 조건에는 사용하지 않는다.
+  // 이전 버전에서 선택했던 담당교사 필터 값이 남아 있어도 학생 목록을 숨기지 않도록 항상 해제한다.
+  f.teacher='전체';
   if(f.parentFaith!=='전체') arr=arr.filter(s=>{const v=s.parentFaith||'미기재';return f.parentFaith==='신앙 가정(기존)'?(v==='신앙 가정(기존)'||v==='신자'):v===f.parentFaith;});
   if(f.multicultural!=='전체') arr=arr.filter(s=>f.multicultural==='다문화 가정'?!!s.multicultural:!s.multicultural);
   if(f.otherDeptSibling!=='전체') arr=arr.filter(s=>f.otherDeptSibling==='타부서 형제자매 있음'?!!s.otherDeptSibling:!s.otherDeptSibling);
@@ -129,7 +131,7 @@ function v14FilteredStudents(){
   if(f.longAbsent!=='전체') arr=arr.filter(s=>f.longAbsent==='장기 미출석'?longAbsenceInfo(s).long:!longAbsenceInfo(s).long);
   return sortStudents(arr,state.settings.studentSort||'name');
 }
-function v14AppliedFilterCount(){ return Object.entries(ui.studentFilters).filter(([k,v])=>!['grade','team','tag'].includes(k)&&v&&v!=='전체').length; }
+function v14AppliedFilterCount(){ return Object.entries(ui.studentFilters).filter(([k,v])=>!['grade','team','tag','teacher'].includes(k)&&v&&v!=='전체').length; }
 function v14VisitGapDays(st){
   const last=v14LastVisit(st); if(!last?.date)return null;
   return Math.max(0,Math.floor((new Date(`${todayKey()}T12:00:00`)-new Date(`${last.date}T12:00:00`))/86400000));
@@ -385,9 +387,8 @@ modalHtml=function(){
   if(ui.modal?.type==='studentFilters'){
     const f=ui.studentFilters;
     const row=(key,label)=>`<label class="filterField"><span>${label}</span><select class="input" data-filter-key="${key}">${v14FilterOptions(key).map(v=>`<option ${f[key]===v?'selected':''}>${esc(v)}</option>`).join('')}</select></label>`;
-    const teacherRow=v14FilterOptions('teacher').length>1?row('teacher','담당교사'):'';
     const care=state.settings.profileAccess!=='youth';
-    return modal(`<div class="modalTitleRow"><div><div class="titleSmall">학생 필터</div><div class="muted">학년·팀은 화면의 ‘보기’에서 선택하고, 여기서는 추가 조건만 고릅니다.</div></div>${close}</div><div class="filterGrid">${teacherRow}${care?row('parentFaith','부모 신앙')+row('multicultural','다문화')+row('otherDeptSibling','타부서 형제자매'):''}${row('gender','성별')}${row('longAbsent','출석 상태')}</div>${care?'<div class="notice">비교 정보는 임원·양육교사용 내부 관리에만 사용하며 출석·달란트 공유와 청년교사용 데이터팩에는 포함하지 않습니다.</div>':'<div class="notice">청년교사용에서는 학생 민감 비교정보를 표시하지 않습니다.</div>'}<div class="grid2"><button class="secondary" data-act="clearStudentFilters">전체 해제</button><button class="primary" data-act="applyStudentFilters">필터 적용</button></div>`);
+    return modal(`<div class="modalTitleRow"><div><div class="titleSmall">학생 필터</div><div class="muted">학년·팀은 화면의 ‘보기’에서 선택하고, 여기서는 추가 조건만 고릅니다.</div></div>${close}</div><div class="filterGrid">${care?row('parentFaith','부모 신앙')+row('multicultural','다문화')+row('otherDeptSibling','타부서 형제자매'):''}${row('gender','성별')}${row('longAbsent','출석 상태')}</div>${care?'<div class="notice">비교 정보는 임원·양육교사용 내부 관리에만 사용하며 출석·달란트 공유와 청년교사용 데이터팩에는 포함하지 않습니다.</div>':'<div class="notice">청년교사용에서는 학생 민감 비교정보를 표시하지 않습니다.</div>'}<div class="grid2"><button class="secondary" data-act="clearStudentFilters">전체 해제</button><button class="primary" data-act="applyStudentFilters">필터 적용</button></div>`);
   }
   if(ui.modal?.type==='dashboard'){
     return modal(`<div class="modalTitleRow"><div><div class="titleSmall">부서 현황</div><div class="muted">월별 흐름과 학년별 상태를 한 화면에서 확인합니다.</div></div>${close}</div><div class="chips">${scopeOptionsWithManaged().map(v=>`<button class="chip ${ui.analyticsScope===v?'active':''}" data-analytics-scope="${attr(v)}">${esc(v)}</button>`).join('')}</div>${v14DashboardHtml()}`);
